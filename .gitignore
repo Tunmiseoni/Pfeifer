@@ -60,3 +60,10 @@ fastlane/report.xml
 fastlane/Preview.html
 fastlane/screenshots/**/*.png
 fastlane/test_output
+
+
+# models (downloaded weights — never commit)
+models/
+
+# benchmark audio clips (personal voice recordings)
+benchmark/clips/

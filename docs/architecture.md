@@ -1,0 +1,107 @@
+# Pfeifer — System Architecture
+
+## Overview
+
+Pfeifer is a single native macOS app (Swift/SwiftUI), non-sandboxed, running
+as a menu-bar utility. One process owns the whole pipeline.
+
+```text
+HotkeyManager ──▶ Recorder ──▶ Transcriber ──▶ CommandMode ──▶ Injector
+(global hotkey)   (mic audio)   (protocol,     (opt-in LLM     (pasteboard +
+                                local          post-process)   simulated ⌘V,
+                                Parakeet)                      restore after)
+```
+
+Flow:
+
+1. **HotkeyManager** — registers a system-wide hotkey; push-to-talk toggles
+   recording.
+2. **Recorder** — captures microphone audio via AVAudioEngine into a buffer
+   (PCM, 16 kHz mono — Parakeet's expected input).
+3. **Transcriber** — `protocol Transcriber` with one async entry point,
+   `transcribe(audio) -> String`. The concrete backend is chosen by the
+   Phase 0 benchmark (below). v1 is batch: the full clip is transcribed once
+   after key release.
+4. **CommandMode** — off by default. When active, the transcript is passed
+   to the on-device Foundation Model (`FoundationModels` framework) for
+   post-processing before insertion. Plain dictation never passes through
+   the LLM.
+5. **Injector** — writes text at the cursor of the focused app: save the
+   current pasteboard → set it to the transcript → synthesize ⌘V via
+   CGEvent → restore the previous pasteboard contents. On any failure (no
+   focused text target, AX error, permission missing), leave the transcript
+   on the clipboard and post a notification.
+
+## Key decisions
+
+| Decision | Choice | Why |
+| --- | --- | --- |
+| App model | Native macOS, single process, menu-bar utility | Latency and direct access to Foundation Models and audio; containers can reach neither |
+| Distribution | Direct (Developer ID), non-sandboxed, never App Store | Global hotkeys and CGEvent injection require Accessibility trust and no sandbox |
+| ASR | Local Parakeet behind `protocol Transcriber` | Swappable runtime; chosen by benchmark, not vibes |
+| LLM usage | Opt-in command mode only | Always-on rewriting adds latency to every utterance and mangles verbatim text |
+| Injection | Pasteboard + simulated ⌘V, restore after | Most cross-app compatible; keystroke-by-keystroke is slow and breaks some apps |
+| Transcripts | Never silently lost — clipboard fallback + notification | A dropped dictation destroys trust in the tool |
+| v1 interaction | Batch push-to-talk | Streaming partials add chunked inference and UI state before the core loop is proven |
+
+## ASR runtime: decision rule (Phase 0)
+
+The runtime is decided by measurement, under a rule fixed in advance.
+
+**Candidates**
+
+1. `parakeet-mlx` — in-process Swift (MLX)
+2. ONNX Runtime with the Parakeet ONNX export (CoreML execution provider)
+3. Python sidecar process (`parakeet-onnx` or CTranslate2) — the complexity
+   baseline
+
+**Acceptance criteria (on the dev machine)**
+
+- A 10-second utterance goes from key-release to inserted text in ~1s
+- Peak memory stays under ~2 GB
+- Fits inside a single `.app` (no bundled Python runtime)
+
+**Rule:** pick the fastest candidate that passes. If no in-process candidate
+passes, accept the sidecar's complexity. Start with
+`parakeet-tdt-0.6b-v2`; drop to a smaller CTC model if it misses the latency
+budget.
+
+## Permissions
+
+| Permission | Needed by | When |
+| --- | --- | --- |
+| Microphone | Recorder | First use |
+| Accessibility (trusted) | HotkeyManager, Injector | First launch, manual grant |
+| Notifications | Clipboard-fallback notice | On fallback |
+
+## Failure modes
+
+| Failure | Behavior |
+| --- | --- |
+| Machine below platform floor | Clear message at launch, no crash |
+| Apple Intelligence disabled | Command mode unavailable; plain dictation still works |
+| Accessibility not granted | Prompt with instructions; injection disabled until granted |
+| No focused paste target / injection fails | Clipboard + notification, never silent |
+| ASR model not downloaded | Offer to download (showing the size) before first use |
+
+## Risks & accepted tradeoffs
+
+- `parakeet-mlx` is a community port and may lag NVIDIA's latest models.
+  Mitigated by the `Transcriber` protocol; the sidecar is the escape hatch.
+- Accessibility trust is a hard, manual gate for the core mechanic.
+- The Apple Intelligence dependency excludes machines with it disabled —
+  accepted.
+- Per-app injection quirks (some apps ignore synthetic ⌘V or guard their
+  pasteboards). Per-app AXUIElement handling is a later enhancement, not v1.
+
+## Open branches
+
+Unresolved by design, to be settled when their phase arrives:
+
+- Exact Parakeet model size (start `tdt-0.6b-v2`, smaller CTC if slow)
+- Hold-to-talk vs toggle hotkey
+- Command-mode trigger (modifier-hold vs spoken prefix)
+- Streaming partial transcript design
+- Per-app AXUIElement injection improvements
+- Transcript history
+- Multi-language support
