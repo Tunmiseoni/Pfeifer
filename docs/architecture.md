@@ -66,6 +66,12 @@ passes, accept the sidecar's complexity. Start with
 `parakeet-tdt-0.6b-v2`; drop to a smaller CTC model if it misses the latency
 budget.
 
+**Outcome:** FluidAudio (in-process Swift, CoreML/ANE) with **Parakeet
+Unified EN 0.6B (int8)** as the model — benchmarked head-to-head against
+TDT v2 (numbers in `docs/roadmap.md` Phase 0 addendum); Unified won on the
+Phase 3 streaming future at an imperceptible latency cost. TDT v2 is the
+documented lighter fallback.
+
 ## Permissions
 
 | Permission | Needed by | When |
@@ -98,7 +104,6 @@ budget.
 
 Unresolved by design, to be settled when their phase arrives:
 
-- Exact Parakeet model size (start `tdt-0.6b-v2`, smaller CTC if slow)
 - Hold-to-talk vs toggle hotkey
 - Command-mode trigger (modifier-hold vs spoken prefix)
 - Streaming partial transcript design
