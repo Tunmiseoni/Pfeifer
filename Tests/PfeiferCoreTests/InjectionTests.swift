@@ -152,4 +152,47 @@ struct PasteboardTests {
             #expect(pasteboard.pasteboardItems?.isEmpty ?? true)
         }
     }
+
+    // MARK: - Coordinator clipboard-fallback (lives here so every test that
+    // touches the shared system pasteboard is serialized together)
+
+    /// Drive a coordinator through its async processing to completion.
+    private func settleCoordinator() async {
+        await Task.yield()
+        await Task.yield()
+        try? await Task.sleep(for: .milliseconds(20))
+        await Task.yield()
+    }
+
+    @MainActor
+    @Test
+    func coordinatorInjectionThrowPutsTranscriptOnClipboardAndNotifies() async throws {
+        let backup = PasteboardBackup.save()
+        defer { backup.restore() }
+
+        struct Boom: Error {}
+        let transcriber = MockTranscriber()
+        transcriber.markReady()
+        transcriber.cannedResult = .success("rescued transcript")
+        let injector = MockInjector()
+        injector.result = .failure(Boom())
+        let notifier = MockNotifier()
+
+        let coordinator = DictationCoordinator(
+            recorder: MockRecorder(),
+            transcriber: transcriber,
+            injector: injector,
+            notifier: notifier
+        )
+
+        coordinator.toggle()
+        coordinator.toggle()
+        await settleCoordinator()
+
+        #expect(coordinator.state == .idle)
+        #expect(notifier.notices.count == 1)
+        #expect(notifier.notices.first?.body.contains("clipboard") == true)
+        #expect(
+            NSPasteboard.general.string(forType: .string) == "rescued transcript")
+    }
 }

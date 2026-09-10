@@ -1,5 +1,12 @@
 @preconcurrency import AVFoundation
 
+/// The recording dependency of `DictationCoordinator`, so the state machine
+/// can be unit-tested with a mock microphone.
+public protocol AudioRecorder: Sendable {
+    func start() throws
+    func stop() throws -> [Float]
+}
+
 /// Records microphone audio to a 16 kHz mono `[Float]` buffer.
 ///
 /// Not an actor: the input tap fires on an AVAudioEngine thread ("may be
@@ -154,3 +161,5 @@ public final class Recorder: @unchecked Sendable {
         )
     }
 }
+
+extension Recorder: AudioRecorder {}
