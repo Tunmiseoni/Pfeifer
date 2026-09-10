@@ -22,6 +22,24 @@ decisions (with reasoning), and the ASR benchmark decision rule.
 - Prefer Apple frameworks (AVFoundation, AppKit, FoundationModels) over
   third-party dependencies. Every new SwiftPM dependency needs a reason.
 
+### Toolchain version is a real dependency
+
+- The toolchain is CommandLineTools only (no Xcode installed). Verified
+  against Swift 6.4 (2026-09-10). Check `swift --version` at session
+  start and note it in session plans — CLT updates are a known pain point.
+- A CLT update mid-project swaps the SwiftPM build engine and SDK
+  (6.3.3 → 6.4 moved `.build` to the swiftbuild layout and the default
+  SDK to MacOSX27). After any update: `rm -rf .build` in every package
+  (root and `benchmark/`) before trusting incremental results.
+- **A green `swift test` that reports zero tests is a failure, not a
+  pass.** Stale artifacts make the runner silently execute nothing and
+  exit 0 — always confirm the expected test count (currently 35 in
+  `PfeiferCoreTests`).
+- The test target's `unsafeFlags` in `Package.swift` (the `-F` for CLT's
+  Testing.framework and the `-plugin-path` for its macros) are
+  load-bearing on this Xcode-less machine — Swift Testing is used because
+  CLT ships no XCTest. Don't clean them up.
+
 ## Downloads: ask first (internet is on a budget)
 
 - **Always ask the user before downloading anything** — new SwiftPM packages,

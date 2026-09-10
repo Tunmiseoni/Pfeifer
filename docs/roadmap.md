@@ -88,8 +88,11 @@ latency gap (0.27 s vs 0.18 s) is imperceptible against the 1 s budget,
 accuracy is at least as good, and it is the only English model whose
 streaming export serves Phase 3 without a second model swap. Accepted
 costs: ~600 MB resident (73 MB true footprint, fine on 8 GB) and a ~140 MB
-larger download than v2. Parakeet TDT v2 stays on disk as the documented
-lighter fallback; the ONNX CPU path remains the escape hatch.
+larger download than v2. Parakeet TDT v2 is the documented lighter
+fallback — its weights are re-downloadable (~465 MB,
+`FluidInference/parakeet-tdt-0.6b-v2-coreml`) and the bench harness still
+supports `--model v2` for head-to-heads; the ONNX CPU path remains the
+escape hatch (harness preserved in git history).
 
 ## Phase 1 — Core loop, no LLM
 
