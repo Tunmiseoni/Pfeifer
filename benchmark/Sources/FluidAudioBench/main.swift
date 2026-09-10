@@ -18,7 +18,7 @@ enum ModelKind: String {
 
 // --- arguments -------------------------------------------------------------
 
-var modelKind = ModelKind.v2
+var modelKind = ModelKind.unified
 var stream = false
 var clips: [String] = []
 var args = Array(CommandLine.arguments.dropFirst())
