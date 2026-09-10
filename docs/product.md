@@ -6,11 +6,17 @@ Models.
 
 ## Core loop (v1)
 
-Press a global hotkey → speak → release → Parakeet transcribes on-device →
-the text is inserted at the cursor in the focused app.
+Tap a global hotkey (Right-⌥+Space) → speak → tap again → Parakeet
+transcribes on-device → the text is inserted at the cursor in the focused
+app.
 
-When command mode is active, the transcript is first post-processed by the
-on-device Foundation Model (cleanup, reformatting, commands) before
+The tap-toggle interaction is v1's deliberate simplification of the
+intended end state: *holding* the chord while streaming live transcription
+(Apple-STT style). When streaming arrives, press duration will
+disambiguate the two — tap toggles a batch recording, hold streams.
+
+When command mode is active, the transcript is first post-processed by
+the on-device Foundation Model (cleanup, reformatting, commands) before
 insertion. When it is off, plain dictation is inserted verbatim.
 
 ## Guarantees

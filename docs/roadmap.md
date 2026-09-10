@@ -109,7 +109,10 @@ Exit: "reformat this as a bullet list" works end-to-end, on-device.
 ## Phase 3 — Polish
 
 - Settings UI (hotkey, model, command-mode trigger)
-- Streaming partial transcripts in a floating indicator
+- Streaming partial transcripts in a floating indicator: holding the
+  chord streams live (via Parakeet Unified's streaming export, already
+  staged in `models/`), tapping keeps the batch toggle — disambiguated
+  by press duration
 - Transcript history
 - Per-app injection improvements (AXUIElement)
 

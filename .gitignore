@@ -65,5 +65,8 @@ fastlane/test_output
 # models (downloaded weights — never commit)
 models/
 
+# assembled app bundle (build artifact, from scripts/make-app.sh)
+*.app/
+
 # benchmark audio clips (personal voice recordings)
 benchmark/clips/

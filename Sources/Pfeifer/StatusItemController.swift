@@ -1,0 +1,147 @@
+import AppKit
+
+/// The menu-bar face of Pfeifer: an icon that mirrors the pipeline state
+/// and a menu with a status line, a Start/Stop fallback for when the
+/// chord can't be used, an Accessibility recheck, and Quit.
+///
+/// The menu re-checks Accessibility every time it opens, so granting trust
+/// in System Settings is picked up without restarting the app.
+@MainActor
+final class StatusItemController: NSObject, NSMenuDelegate {
+    enum Display: Equatable {
+        case warming
+        case ready
+        case requestingMicrophone
+        case microphoneDenied
+        case accessibilityNeeded
+        case recording
+        case transcribing
+        case injecting
+        case failed(String)
+    }
+
+    private let statusItem: NSStatusItem
+    private let onToggle: () -> Void
+    private let onRecheckAccessibility: () -> Void
+    private let onQuit: () -> Void
+
+    private let statusLine: NSMenuItem
+    private let toggleLine: NSMenuItem
+    private let recheckLine: NSMenuItem
+
+    var display: Display {
+        didSet {
+            guard oldValue != display else { return }
+            render()
+        }
+    }
+
+    init(
+        initialDisplay: Display,
+        onToggle: @escaping () -> Void,
+        onRecheckAccessibility: @escaping () -> Void,
+        onQuit: @escaping () -> Void
+    ) {
+        self.statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        self.display = initialDisplay
+        self.onToggle = onToggle
+        self.onRecheckAccessibility = onRecheckAccessibility
+        self.onQuit = onQuit
+
+        let menu = NSMenu()
+        menu.autoenablesItems = false
+
+        statusLine = NSMenuItem(title: "", action: nil, keyEquivalent: "")
+        statusLine.isEnabled = false
+        menu.addItem(statusLine)
+        menu.addItem(.separator())
+
+        toggleLine = NSMenuItem(title: "", action: #selector(toggleClicked), keyEquivalent: "")
+        menu.addItem(toggleLine)
+
+        recheckLine = NSMenuItem(
+            title: "Recheck Accessibility…", action: #selector(recheckClicked),
+            keyEquivalent: "")
+        menu.addItem(recheckLine)
+
+        menu.addItem(.separator())
+        let quitLine = NSMenuItem(
+            title: "Quit Pfeifer", action: #selector(quitClicked), keyEquivalent: "q")
+        menu.addItem(quitLine)
+
+        super.init()
+
+        toggleLine.target = self
+        recheckLine.target = self
+        quitLine.target = self
+        menu.delegate = self
+        statusItem.menu = menu
+        render()
+    }
+
+    // MARK: - NSMenuDelegate (recheck on every menu open)
+
+    func menuWillOpen(_ menu: NSMenu) {
+        onRecheckAccessibility()
+    }
+
+    // MARK: - Actions
+
+    @objc private func toggleClicked() {
+        onToggle()
+    }
+
+    @objc private func recheckClicked() {
+        onRecheckAccessibility()
+    }
+
+    @objc private func quitClicked() {
+        onQuit()
+    }
+
+    // MARK: - Rendering
+
+    private func render() {
+        statusItem.button?.image = NSImage(
+            systemSymbolName: symbolName, accessibilityDescription: statusText)
+        statusItem.button?.toolTip = statusText
+        statusLine.title = statusText
+        toggleLine.title = isRecording ? "Stop dictation" : "Start dictation"
+        recheckLine.isHidden = display != .accessibilityNeeded
+    }
+
+    private var isRecording: Bool {
+        switch display {
+        case .recording: return true
+        default: return false
+        }
+    }
+
+    private var statusText: String {
+        switch display {
+        case .warming: return "Pfeifer — warming up…"
+        case .ready: return "Pfeifer — ready (⌥+Space)"
+        case .requestingMicrophone: return "Pfeifer — check the microphone prompt"
+        case .microphoneDenied: return "Pfeifer — microphone access denied"
+        case .accessibilityNeeded:
+            return "Pfeifer — grant Accessibility in System Settings"
+        case .recording: return "Pfeifer — recording…"
+        case .transcribing: return "Pfeifer — transcribing…"
+        case .injecting: return "Pfeifer — inserting…"
+        case .failed(let reason): return "Pfeifer — \(reason)"
+        }
+    }
+
+    private var symbolName: String {
+        switch display {
+        case .warming: return "hourglass"
+        case .ready: return "mic"
+        case .requestingMicrophone, .microphoneDenied: return "mic.slash"
+        case .accessibilityNeeded: return "exclamationmark.shield"
+        case .recording: return "mic.fill"
+        case .transcribing: return "waveform"
+        case .injecting: return "arrow.down.doc"
+        case .failed: return "exclamationmark.triangle"
+        }
+    }
+}

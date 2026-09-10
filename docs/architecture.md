@@ -14,8 +14,9 @@ HotkeyManager ──▶ Recorder ──▶ Transcriber ──▶ CommandMode ─
 
 Flow:
 
-1. **HotkeyManager** — registers a system-wide hotkey; push-to-talk toggles
-   recording.
+1. **HotkeyManager** — registers a system-wide hotkey; tapping the
+   Right-⌥+Space chord toggles recording (hold-to-stream is the Phase 3
+   extension, disambiguated by press duration).
 2. **Recorder** — captures microphone audio via AVAudioEngine into a buffer
    (PCM, 16 kHz mono — Parakeet's expected input).
 3. **Transcriber** — `protocol Transcriber` with one async entry point,
@@ -42,7 +43,7 @@ Flow:
 | LLM usage | Opt-in command mode only | Always-on rewriting adds latency to every utterance and mangles verbatim text |
 | Injection | Pasteboard + simulated ⌘V, restore after | Most cross-app compatible; keystroke-by-keystroke is slow and breaks some apps |
 | Transcripts | Never silently lost — clipboard fallback + notification | A dropped dictation destroys trust in the tool |
-| v1 interaction | Batch push-to-talk | Streaming partials add chunked inference and UI state before the core loop is proven |
+| v1 interaction | Tap-toggle on the Right-⌥+Space chord | Batch-first: the core loop is proven end-to-end before streaming exists. Hold-to-stream arrives in Phase 3, disambiguated from tapping by press duration; the chosen model (Parakeet Unified EN) already has the streaming export for it |
 
 ## ASR runtime: decision rule (Phase 0)
 
@@ -104,7 +105,6 @@ documented lighter fallback.
 
 Unresolved by design, to be settled when their phase arrives:
 
-- Hold-to-talk vs toggle hotkey
 - Command-mode trigger (modifier-hold vs spoken prefix)
 - Streaming partial transcript design
 - Per-app AXUIElement injection improvements
