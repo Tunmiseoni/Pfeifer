@@ -94,6 +94,23 @@ fallback — its weights are re-downloadable (~465 MB,
 supports `--model v2` for head-to-heads; the ONNX CPU path remains the
 escape hatch (harness preserved in git history).
 
+### Re-baseline on Swift 6.4 (2026-09-11, pre-restructuring)
+
+Before the capability-oriented restructuring (module split), re-ran the
+benchmark after the CLT 6.3.3 → 6.4 update (new swiftbuild engine, new SDK
+layout; `rm -rf .build` in both packages first). Same clips, same machine,
+best of 3 warm runs:
+
+- Batch (Unified int8): 5 s → 0.10 s, 15 s → 0.27 s, 60 s → 0.81 s —
+  matches the Phase 0 addendum within noise.
+- Streaming (320 ms tier): per-chunk avg ~31 ms (max 77 ms), ~5.0–5.1x
+  real-time — matches.
+- Model load: a freshly built binary's first launch paid the ~27 s ANE
+  compile; an immediate relaunch loaded in 0.41 s (compile cache
+  persists per the addendum).
+
+These numbers are the reference the restructuring must not regress.
+
 ## Phase 1 — Core loop, no LLM
 
 Global hotkey → record → transcribe → insert at the cursor, plus the
