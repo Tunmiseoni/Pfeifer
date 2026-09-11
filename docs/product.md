@@ -21,8 +21,9 @@ insertion. When it is off, plain dictation is inserted verbatim.
 
 ## Guarantees
 
-- **Local-first.** Audio and transcripts never leave the machine. No cloud
-  ASR, no cloud LLM, ever.
+- **Local-first by default.** Audio and transcripts are processed
+  on-device. Cloud providers (ASR or LLM), if ever offered, are explicit
+  opt-ins — labeled as cloud, never silent, never the default path.
 - **The transcript is never silently lost.** If insertion fails or there is
   no paste target, the transcript goes to the clipboard and a notification
   shows what was captured.
@@ -34,7 +35,7 @@ insertion. When it is off, plain dictation is inserted verbatim.
 - Apple Intelligence enabled (required by the Foundation Models framework)
 
 The app fails gracefully with a clear message on machines below the floor.
-Intel Macs and cloud fallbacks are explicitly out of scope.
+Intel Macs and silent cloud fallbacks are explicitly out of scope.
 
 ## Non-goals (v1)
 
@@ -42,7 +43,8 @@ Intel Macs and cloud fallbacks are explicitly out of scope.
 - Chat UI
 - Always-listening ("hey Pfeifer") wake-word activation
 - Streaming partial transcripts during recording
-- Cloud LLM or cloud ASR fallback
+- Silent cloud fallback for ASR or LLM (an explicit, labeled opt-in cloud
+  provider is a possible later addition — see Guarantees)
 - App Store distribution (the core mechanic requires Accessibility trust and
   no sandbox — see `docs/architecture.md`)
 - Cross-platform (macOS only)
