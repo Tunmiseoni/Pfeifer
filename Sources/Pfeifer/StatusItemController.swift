@@ -4,8 +4,9 @@ import AppKit
 /// and a menu with a status line, a Start/Stop fallback for when the
 /// chord can't be used, an Accessibility recheck, and Quit.
 ///
-/// The menu re-checks Accessibility every time it opens, so granting trust
-/// in System Settings is picked up without restarting the app.
+/// The menu re-checks Accessibility silently every time it opens, so
+/// granting trust in System Settings is picked up without restarting the
+/// app — the system prompt itself is requested only once, at launch.
 @MainActor
 final class StatusItemController: NSObject, NSMenuDelegate {
     enum Display: Equatable {
@@ -28,6 +29,7 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     private let statusLine: NSMenuItem
     private let toggleLine: NSMenuItem
     private let recheckLine: NSMenuItem
+    private let hintLine: NSMenuItem
 
     var display: Display {
         didSet {
@@ -63,6 +65,15 @@ final class StatusItemController: NSObject, NSMenuDelegate {
             title: "Recheck Accessibility…", action: #selector(recheckClicked),
             keyEquivalent: "")
         menu.addItem(recheckLine)
+
+        // Rebuilds change a dev build's code signature, which silently
+        // invalidates an existing grant — the toggle stays on but trust
+        // doesn't. Only meaningful in the accessibility-needed state.
+        hintLine = NSMenuItem(
+            title: "Already listed and on? Remove and re-add after a rebuild",
+            action: nil, keyEquivalent: "")
+        hintLine.isEnabled = false
+        menu.addItem(hintLine)
 
         menu.addItem(.separator())
         let quitLine = NSMenuItem(
@@ -108,6 +119,7 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         statusLine.title = statusText
         toggleLine.title = isRecording ? "Stop dictation" : "Start dictation"
         recheckLine.isHidden = display != .accessibilityNeeded
+        hintLine.isHidden = display != .accessibilityNeeded
     }
 
     private var isRecording: Bool {

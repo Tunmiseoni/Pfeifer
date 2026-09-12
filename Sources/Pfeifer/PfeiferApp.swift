@@ -55,6 +55,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var microphonePermission: MicrophonePermission = .unknown
     private var watcherStarted = false
 
+    /// The transcriber's settled state, kept current by the warm-up task so
+    /// a grant that arrives late doesn't park the menu bar at "warming".
+    private var transcriberReadyDisplay: StatusItemController.Display = .warming
+    private var accessibilityPollTask: Task<Void, Never>?
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Model directory first: without it the app has nothing to say.
         let modelDirectory: URL
@@ -85,16 +90,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         Task { [weak self] in
             let ready = await transcriber.isReady
             guard let self else { return }
-            if ready {
-                if self.statusItem?.display == .warming {
-                    self.statusItem?.display = .ready
-                }
-            } else if self.statusItem?.display == .warming {
-                self.statusItem?.display = .failed("Model failed to load")
+            self.transcriberReadyDisplay = ready
+                ? .ready : .failed("Model failed to load")
+            if self.statusItem?.display == .warming {
+                self.statusItem?.display = self.transcriberReadyDisplay
             }
         }
 
-        installHotkeyWatcherOrPromptForAccessibility()
+        installHotkeyWatcherOrPromptForAccessibility(prompt: true)
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -112,28 +115,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             initialDisplay: display,
             onToggle: { [weak self] in self?.toggle() },
             onRecheckAccessibility: { [weak self] in
-                self?.installHotkeyWatcherOrPromptForAccessibility()
+                self?.installHotkeyWatcherOrPromptForAccessibility(prompt: false)
             },
             onQuit: { NSApplication.shared.terminate(nil) }
         )
     }
 
-    /// The Accessibility gate: prompt once via the system dialog, install
-    /// the watcher when trusted, and surface the grant-instructions state
-    /// when not.
-    private func installHotkeyWatcherOrPromptForAccessibility() {
+    /// The Accessibility gate: request the system dialog at most once per
+    /// process (launch only — every recheck must poll silently, or the
+    /// dialog spams on each menu open), install the watcher when trusted,
+    /// and surface the grant-instructions state when not.
+    private func installHotkeyWatcherOrPromptForAccessibility(prompt: Bool) {
         // String value of kAXTrustedCheckOptionPrompt — the C global itself
         // is not concurrency-safe to reference under Swift 6.
-        let options = ["AXTrustedCheckOptionPrompt": true] as CFDictionary
+        let options = ["AXTrustedCheckOptionPrompt": prompt] as CFDictionary
         guard AXIsProcessTrustedWithOptions(options) else {
             statusItem?.display = .accessibilityNeeded
+            startAccessibilityPollingIfNeeded()
             return
         }
 
+        stopAccessibilityPolling()
+
         guard !watcherStarted else {
-            if statusItem?.display == .accessibilityNeeded {
-                statusItem?.display = transcriberReadyDisplay()
-            }
+            settleDisplayAfterWatcherInstall()
             return
         }
 
@@ -144,17 +149,45 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             try watcher.start()
             watcherStarted = true
             hotkeyWatcher = watcher
-            if statusItem?.display == .accessibilityNeeded {
-                statusItem?.display = transcriberReadyDisplay()
-            }
+            settleDisplayAfterWatcherInstall()
         } catch {
-            statusItem?.display = .accessibilityNeeded
+            // Trusted but the tap still failed (e.g. another utility owns
+            // it) — that is not an Accessibility problem, so don't send the
+            // user to System Settings for it.
+            statusItem?.display = .failed("Hotkey tap unavailable")
         }
     }
 
-    private func transcriberReadyDisplay() -> StatusItemController.Display {
-        // The warm-up task corrects this to .ready/.failed on its own.
-        .warming
+    /// While untrusted, poll for the grant so the watcher is installed the
+    /// moment trust appears — System Settings grants are otherwise only
+    /// noticed on the next menu open or manual recheck.
+    private func startAccessibilityPollingIfNeeded() {
+        guard accessibilityPollTask == nil else { return }
+        accessibilityPollTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(2))
+                guard !Task.isCancelled, let self else { return }
+                if AXIsProcessTrusted() {
+                    self.installHotkeyWatcherOrPromptForAccessibility(prompt: false)
+                }
+            }
+        }
+    }
+
+    private func stopAccessibilityPolling() {
+        accessibilityPollTask?.cancel()
+        accessibilityPollTask = nil
+    }
+
+    /// Once the watcher is (re)installed, a stale accessibility-needed or
+    /// tap-failure state gives way to the transcriber's current state.
+    private func settleDisplayAfterWatcherInstall() {
+        switch statusItem?.display {
+        case .accessibilityNeeded?, .failed("Hotkey tap unavailable")?:
+            statusItem?.display = transcriberReadyDisplay
+        default:
+            break
+        }
     }
 
     // MARK: - Interaction
