@@ -1,10 +1,20 @@
 #!/bin/bash
-# Assemble Pfeifer.app from the release build, ad-hoc codesign it, and
+# Assemble Pfeifer.app from the release build, codesign it, and
 # (optionally) launch it. Run from the repo root via `make app`.
 #
 # The app is a menu-bar agent (LSUIElement): no Dock icon, no main window.
 # The bundle identifier and usage descriptions below are required for the
 # microphone TCC prompt and notification center to work.
+#
+# Signing: an ad-hoc signature changes with every rebuild, which silently
+# invalidates the TCC Accessibility grant (the System Settings toggle
+# stays on, but the new binary isn't trusted — so the app re-prompts
+# forever). To keep the grant stable across rebuilds, create once in
+# Keychain Access → Certificate Assistant → Create Certificate: a
+# self-signed certificate named "Pfeifer Development", certificate type
+# "Code Signing", in the login keychain. This script signs with it
+# automatically when present and falls back to ad-hoc (with a warning)
+# when not.
 set -euo pipefail
 
 APP_NAME="Pfeifer"
@@ -53,7 +63,19 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 </plist>
 PLIST
 
-codesign --force --sign - "$APP" >/dev/null 2>&1
+# Prefer the stable "Pfeifer Development" identity over ad-hoc so the
+# Accessibility grant survives rebuilds (see header). Fall back to ad-hoc
+# when the certificate is missing or unusable (e.g. locked keychain).
+IDENTITY="$(security find-identity -v -p codesigning 2>/dev/null \
+  | awk -F'"' '/Pfeifer Development/ {print $2; exit}')"
+if [[ -n "$IDENTITY" ]] && codesign --force --sign "$IDENTITY" "$APP" 2>/dev/null; then
+  echo "codesigned $APP with '$IDENTITY' (stable across rebuilds)"
+else
+  codesign --force --sign - "$APP" >/dev/null 2>&1
+  echo "warning: signed ad-hoc — the Accessibility grant breaks on every rebuild." >&2
+  echo "         Create a 'Pfeifer Development' code-signing certificate; see the" >&2
+  echo "         header of scripts/make-app.sh for one-time setup." >&2
+fi
 echo "built $APP"
 
 if [[ "${1:-}" == "--open" ]]; then

@@ -81,13 +81,20 @@ documented lighter fallback.
 | Accessibility (trusted) | HotkeyManager, Injector | First launch, manual grant |
 | Notifications | Clipboard-fallback notice | On fallback |
 
+Dev builds must be signed with the stable self-signed "Pfeifer
+Development" identity (auto-detected by `scripts/make-app.sh`, ad-hoc
+fallback with a warning): ad-hoc signatures change every rebuild, which
+silently invalidates the Accessibility grant — the System Settings
+toggle stays on while the new binary stays untrusted. Distribution
+builds use Developer ID, which has the same stability.
+
 ## Failure modes
 
 | Failure | Behavior |
 | --- | --- |
 | Machine below platform floor | Clear message at launch, no crash |
 | Apple Intelligence disabled | Command mode unavailable; plain dictation still works |
-| Accessibility not granted | Prompt with instructions; injection disabled until granted |
+| Accessibility not granted | Prompt once at launch; rechecked silently (menu open + poll) until granted, watcher auto-installs |
 | No focused paste target / injection fails | Clipboard + notification, never silent |
 | ASR model not downloaded | Offer to download (showing the size) before first use |
 
