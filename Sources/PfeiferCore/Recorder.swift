@@ -49,6 +49,23 @@ public final class Recorder: @unchecked Sendable {
         accumulationLock.withLock { accumulated }
     }
 
+    /// Snapshot of the microphone TCC state, queryable without prompting.
+    public enum MicrophoneStatus: Sendable, Equatable {
+        case granted
+        case denied
+        case undetermined
+    }
+
+    /// The current mic permission — synchronous, and never prompts.
+    public static func microphoneStatus() -> MicrophoneStatus {
+        switch AVAudioApplication.shared.recordPermission {
+        case .granted: return .granted
+        case .denied: return .denied
+        case .undetermined: return .undetermined
+        @unknown default: return .undetermined
+        }
+    }
+
     /// Request mic permission (TCC). Call before the first recording; a
     /// denial is a manual gate — surfaced, never retried in a loop.
     public static func requestMicrophonePermission() async -> Bool {

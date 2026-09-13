@@ -199,22 +199,40 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case .granted:
             coordinator.toggle()
         case .denied:
-            statusItem?.display = .microphoneDenied
-            Task {
-                await UserNotifier().notify(
-                    title: "Pfeifer",
-                    body: "Microphone access is denied — enable it in System Settings for Pfeifer.")
-            }
+            showMicrophoneDenied()
         case .unknown:
-            // This first tap only asks for permission; the next one records.
-            statusItem?.display = .requestingMicrophone
-            Task { [weak self] in
-                let granted = await Recorder.requestMicrophonePermission()
-                guard let self else { return }
-                self.microphonePermission = granted ? .granted : .denied
-                self.statusItem?.display = granted
-                    ? .ready : .microphoneDenied
+            // Settle permission without wasting this tap: an existing
+            // grant is read synchronously and records immediately, and a
+            // first-ever request chains straight into recording on grant.
+            switch Recorder.microphoneStatus() {
+            case .granted:
+                microphonePermission = .granted
+                coordinator.toggle()
+            case .denied:
+                showMicrophoneDenied()
+            case .undetermined:
+                statusItem?.display = .requestingMicrophone
+                Task { [weak self] in
+                    let granted = await Recorder.requestMicrophonePermission()
+                    guard let self else { return }
+                    self.microphonePermission = granted ? .granted : .denied
+                    if granted {
+                        self.coordinator?.toggle()
+                    } else {
+                        self.showMicrophoneDenied()
+                    }
+                }
             }
+        }
+    }
+
+    private func showMicrophoneDenied() {
+        microphonePermission = .denied
+        statusItem?.display = .microphoneDenied
+        Task {
+            await UserNotifier().notify(
+                title: "Pfeifer",
+                body: "Microphone access is denied — enable it in System Settings for Pfeifer.")
         }
     }
 
