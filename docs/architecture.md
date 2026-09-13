@@ -82,11 +82,12 @@ documented lighter fallback.
 | Notifications | Clipboard-fallback notice | On fallback |
 
 Dev builds must be signed with the stable self-signed "Pfeifer
-Development" identity (auto-detected by `scripts/make-app.sh`, ad-hoc
-fallback with a warning): ad-hoc signatures change every rebuild, which
-silently invalidates the Accessibility grant — the System Settings
-toggle stays on while the new binary stays untrusted. Distribution
-builds use Developer ID, which has the same stability.
+Development" identity (created once via `make cert`, auto-detected by
+`scripts/make-app.sh`, ad-hoc fallback with a warning): ad-hoc
+signatures change every rebuild, which silently invalidates the
+Accessibility grant — the System Settings toggle stays on while the new
+binary stays untrusted. Distribution builds use Developer ID, which has
+the same stability.
 
 ## Failure modes
 
