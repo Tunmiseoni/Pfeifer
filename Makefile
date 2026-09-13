@@ -1,4 +1,4 @@
-.PHONY: build test app cert
+.PHONY: build test app cert clean
 
 build:
 	swift build -c release
@@ -15,3 +15,8 @@ app: build
 # so Accessibility grants survive rebuilds (see scripts/make-app.sh).
 cert:
 	bash scripts/make-cert.sh
+
+# Delete regenerables (SwiftPM .build dirs, .DS_Store). Flags: --dry-run,
+# --app (also Pfeifer.app), --models (asks first), --global (SwiftPM cache).
+clean:
+	bash scripts/clean.sh
