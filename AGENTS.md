@@ -33,7 +33,7 @@ decisions (with reasoning), and the ASR benchmark decision rule.
   (root and `benchmark/`) before trusting incremental results.
 - **A green `swift test` that reports zero tests is a failure, not a
   pass.** Stale artifacts make the runner silently execute nothing and
-  exit 0 — always confirm the expected test count (currently 35 in
+  exit 0 — always confirm the expected test count (currently 37 in
   `PfeiferCoreTests`).
 - The test target's `unsafeFlags` in `Package.swift` (the `-F` for CLT's
   Testing.framework and the `-plugin-path` for its macros) are

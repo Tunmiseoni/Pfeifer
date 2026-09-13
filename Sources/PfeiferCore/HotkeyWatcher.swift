@@ -8,9 +8,12 @@ import Foundation
 /// (and its autorepeats) are swallowed so nothing is typed into the focused
 /// app. The Right-⌥ press itself is passed through — the system needs it to
 /// track the modifier, and a lone Right-⌥ is inert in most apps (accepted
-/// v1 tradeoff). Tap creation fails without Accessibility trust; the caller
-/// surfaces that as the app's permission gate. A tap disabled by the
-/// system's timeout watchdog is re-enabled automatically.
+/// v1 tradeoff). Modifier keys arrive as flagsChanged events, never as
+/// keyDown/keyUp; the watcher arms on the right-⌥ device flag bit in those
+/// events, the only signal that distinguishes right ⌥ from left. Tap
+/// creation fails without Accessibility trust; the caller surfaces that as
+/// the app's permission gate. A tap disabled by the system's timeout
+/// watchdog is re-enabled automatically.
 @MainActor
 public final class HotkeyWatcher {
     public enum WatcherError: Error, Equatable {
@@ -25,6 +28,11 @@ public final class HotkeyWatcher {
     nonisolated public static let rightOptionKeyCode: CGKeyCode = 61  // 0x3D
     /// kVK_Space.
     nonisolated public static let spaceKeyCode: CGKeyCode = 49
+    /// NX_DEVICERALTKEYMASK (0x40): the device-dependent flag bit marking
+    /// the right ⌥ as held. The generic .maskAlternate can't tell left
+    /// from right, and modifiers only ever arrive as flagsChanged.
+    nonisolated public static let rightOptionDeviceFlag = CGEventFlags(
+        rawValue: 0x40)
 
     private let onChord: ChordHandler
     private var tap: CFMachPort?
@@ -43,6 +51,7 @@ public final class HotkeyWatcher {
         let eventMask =
             (1 << CGEventType.keyDown.rawValue)
             | (1 << CGEventType.keyUp.rawValue)
+            | (1 << CGEventType.flagsChanged.rawValue)
             | (1 << CGEventType.tapDisabledByTimeout.rawValue)
 
         guard
@@ -96,13 +105,26 @@ public final class HotkeyWatcher {
 
     /// Classify a keyboard event against the Right-⌥+Space chord.
     /// Pure function of the event's fields — unit-tested with synthetic
-    /// CGEvents, no tap or Accessibility trust needed.
+    /// CGEvents, no tap or Accessibility trust needed. `rightOptionDown`
+    /// is the watcher's tracked state (used for Space); the right-⌥ device
+    /// bit itself is only carried by flagsChanged events, so
+    /// `rightOptionDeviceDown` is consulted for those alone.
     nonisolated public static func classify(
         type: CGEventType,
         keyCode: Int64,
         autorepeat: Bool,
-        rightOptionDown: Bool
+        rightOptionDown: Bool,
+        rightOptionDeviceDown: Bool = false
     ) -> EventClass {
+        // Modifiers arrive as flagsChanged: the keycode names the modifier
+        // that changed and the event's flag bits hold its new state.
+        if type == .flagsChanged {
+            if keyCode == Int64(rightOptionKeyCode) {
+                return rightOptionDeviceDown ? .rightOptionDown : .rightOptionUp
+            }
+            return .other
+        }
+
         let isKeyDown = type == .keyDown
         switch keyCode {
         case Int64(rightOptionKeyCode):
@@ -129,7 +151,8 @@ public final class HotkeyWatcher {
     fileprivate func shouldSwallow(
         type: CGEventType,
         keyCode: Int64,
-        autorepeat: Bool
+        autorepeat: Bool,
+        rightOptionDeviceDown: Bool
     ) -> Bool {
         switch type {
         case .tapDisabledByTimeout:
@@ -139,12 +162,13 @@ public final class HotkeyWatcher {
             }
             return false
 
-        case .keyDown, .keyUp:
+        case .keyDown, .keyUp, .flagsChanged:
             switch Self.classify(
                 type: type,
                 keyCode: keyCode,
                 autorepeat: autorepeat,
-                rightOptionDown: rightOptionDown
+                rightOptionDown: rightOptionDown,
+                rightOptionDeviceDown: rightOptionDeviceDown
             ) {
             case .rightOptionDown:
                 rightOptionDown = true
@@ -185,8 +209,15 @@ private func pfeiferChordTapCallback(
     let watcher = Unmanaged<HotkeyWatcher>.fromOpaque(userInfo).takeUnretainedValue()
     let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
     let autorepeat = event.getIntegerValueField(.keyboardEventAutorepeat) != 0
+    let rightOptionDeviceDown =
+        event.flags.rawValue & HotkeyWatcher.rightOptionDeviceFlag.rawValue != 0
     let swallow: Bool = MainActor.assumeIsolated {
-        watcher.shouldSwallow(type: type, keyCode: keyCode, autorepeat: autorepeat)
+        watcher.shouldSwallow(
+            type: type,
+            keyCode: keyCode,
+            autorepeat: autorepeat,
+            rightOptionDeviceDown: rightOptionDeviceDown
+        )
     }
     return swallow ? nil : Unmanaged.passUnretained(event)
 }

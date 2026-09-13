@@ -132,7 +132,7 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     private var statusText: String {
         switch display {
         case .warming: return "Pfeifer — warming up…"
-        case .ready: return "Pfeifer — ready (⌥+Space)"
+        case .ready: return "Pfeifer — ready (Right-⌥+Space)"
         case .requestingMicrophone: return "Pfeifer — check the microphone prompt"
         case .microphoneDenied: return "Pfeifer — microphone access denied"
         case .accessibilityNeeded:

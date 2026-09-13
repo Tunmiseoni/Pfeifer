@@ -100,4 +100,42 @@ struct HotkeyWatcherClassificationTests {
                 autorepeat: false, rightOptionDown: true
             ) == .other)
     }
+
+    @Test
+    func rightOptionComesThroughFlagsChanged() {
+        // Real modifier presses arrive as flagsChanged (never keyDown/keyUp);
+        // the right-⌥ device bit in the event's flags is the down/up signal.
+        // Regression test: the tap once listened for keyDown/keyUp only and
+        // never saw Right-⌥ at all, so the chord could not fire.
+        #expect(
+            HotkeyWatcher.classify(
+                type: .flagsChanged,
+                keyCode: Int64(HotkeyWatcher.rightOptionKeyCode),
+                autorepeat: false,
+                rightOptionDown: false,
+                rightOptionDeviceDown: true
+            ) == .rightOptionDown)
+
+        #expect(
+            HotkeyWatcher.classify(
+                type: .flagsChanged,
+                keyCode: Int64(HotkeyWatcher.rightOptionKeyCode),
+                autorepeat: false,
+                rightOptionDown: true,
+                rightOptionDeviceDown: false
+            ) == .rightOptionUp)
+    }
+
+    @Test
+    func leftOptionFlagsChangedIsIgnored() {
+        // kVK_LeftOption (58) never arms the chord — only the right one does.
+        #expect(
+            HotkeyWatcher.classify(
+                type: .flagsChanged,
+                keyCode: 58,
+                autorepeat: false,
+                rightOptionDown: false,
+                rightOptionDeviceDown: true
+            ) == .other)
+    }
 }
