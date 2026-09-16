@@ -76,9 +76,43 @@ public actor FoundationModelCommandProcessor: CommandProcessor {
         }
 
         let trimmed = response.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else {
+        let cleaned = Self.stripAcknowledgementPrefix(trimmed)
+        guard !cleaned.isEmpty else {
             throw CommandProcessorError.emptyResponse
         }
-        return trimmed
+        return cleaned
+    }
+
+    /// Remove a leading acknowledgement/framing clause the on-device model
+    /// sometimes prepends despite the instructions, e.g.
+    /// "Sure, here is the text with the instruction applied: …".
+    ///
+    /// Deliberately conservative: it only strips shapes that are unambiguously
+    /// model framing ("<ack> … here is …:" or "here is …:"), never a
+    /// legitimate sentence that merely opens with "Sure," or "Of course".
+    /// Measured in docs/command-mode-experiment.md — the aggressive variant
+    /// that also stripped bare "<ack>," prefixes corrupted valid output.
+    ///
+    /// - Returns: the input with the framing removed, or the input unchanged
+    ///   when no framing matches (or stripping would leave nothing).
+    static func stripAcknowledgementPrefix(_ input: String) -> String {
+        var text = input.trimmingCharacters(in: .whitespacesAndNewlines)
+        let patterns = [
+            #"^(sure|certainly|of course|okay|ok|absolutely|no problem)[,!.]?\s*here(?:'s| is)[^:\n]*:\s*"#,
+            #"^here(?:'s| is)[^:\n]*:\s*"#,
+        ]
+        for pattern in patterns {
+            guard
+                let range = text.range(
+                    of: pattern, options: [.regularExpression, .caseInsensitive]),
+                range.lowerBound == text.startIndex
+            else { continue }
+            let remainder = String(text[range.upperBound...])
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !remainder.isEmpty else { continue }
+            text = remainder
+            break
+        }
+        return text
     }
 }
