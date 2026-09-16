@@ -17,6 +17,7 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         case accessibilityNeeded
         case recording
         case transcribing
+        case processing
         case injecting
         case failed(String)
     }
@@ -139,6 +140,7 @@ final class StatusItemController: NSObject, NSMenuDelegate {
             return "Pfeifer — grant Accessibility in System Settings"
         case .recording: return "Pfeifer — recording…"
         case .transcribing: return "Pfeifer — transcribing…"
+        case .processing: return "Pfeifer — applying command…"
         case .injecting: return "Pfeifer — inserting…"
         case .failed(let reason): return "Pfeifer — \(reason)"
         }
@@ -152,6 +154,7 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         case .accessibilityNeeded: return "exclamationmark.shield"
         case .recording: return "mic.fill"
         case .transcribing: return "waveform"
+        case .processing: return "wand.and.stars"
         case .injecting: return "arrow.down.doc"
         case .failed: return "exclamationmark.triangle"
         }

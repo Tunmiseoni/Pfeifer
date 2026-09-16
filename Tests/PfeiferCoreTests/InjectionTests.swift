@@ -181,6 +181,7 @@ struct PasteboardTests {
         let coordinator = DictationCoordinator(
             recorder: MockRecorder(),
             transcriber: transcriber,
+            commandProcessor: MockCommandProcessor(),
             injector: injector,
             notifier: notifier
         )

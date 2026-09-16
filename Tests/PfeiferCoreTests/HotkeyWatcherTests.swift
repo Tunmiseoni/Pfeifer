@@ -45,7 +45,28 @@ struct HotkeyWatcherClassificationTests {
             HotkeyWatcher.classify(
                 type: space.type, keyCode: space.keyCode, autorepeat: false,
                 rightOptionDown: true
-            ) == .chordSpace(autorepeat: false))
+            ) == .chordSpace(autorepeat: false, mode: .dictation))
+    }
+
+    @Test
+    func shiftTurnsTheChordIntoCommandMode() {
+        let space = makeKeyEvent(keyCode: HotkeyWatcher.spaceKeyCode, keyDown: true)
+        #expect(
+            HotkeyWatcher.classify(
+                type: space.type, keyCode: space.keyCode, autorepeat: false,
+                rightOptionDown: true, shiftDown: true
+            ) == .chordSpace(autorepeat: false, mode: .command))
+    }
+
+    @Test
+    func shiftAloneDoesNotArmTheCommandChord() {
+        // Shift without Right-⌥ is ordinary typing, not a command chord.
+        let space = makeKeyEvent(keyCode: HotkeyWatcher.spaceKeyCode, keyDown: true)
+        #expect(
+            HotkeyWatcher.classify(
+                type: space.type, keyCode: space.keyCode, autorepeat: false,
+                rightOptionDown: false, shiftDown: true
+            ) == .other)
     }
 
     @Test
@@ -56,7 +77,7 @@ struct HotkeyWatcherClassificationTests {
             HotkeyWatcher.classify(
                 type: space.type, keyCode: space.keyCode, autorepeat: true,
                 rightOptionDown: true
-            ) == .chordSpace(autorepeat: true))
+            ) == .chordSpace(autorepeat: true, mode: .dictation))
     }
 
     @Test

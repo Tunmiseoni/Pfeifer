@@ -66,19 +66,24 @@ final class MockNotifier: Notifier, @unchecked Sendable {
 struct DictationCoordinatorTests {
     private func makePipeline(
         transcriber: MockTranscriber = MockTranscriber(),
+        commandProcessor: MockCommandProcessor = MockCommandProcessor(),
         injector: MockInjector = MockInjector(),
         recorder: MockRecorder = MockRecorder(),
         notifier: MockNotifier = MockNotifier()
-    ) -> (DictationCoordinator, MockTranscriber, MockInjector, MockRecorder, MockNotifier) {
+    ) -> (
+        DictationCoordinator, MockTranscriber, MockCommandProcessor, MockInjector, MockRecorder,
+        MockNotifier
+    ) {
         let events = EventLog()
         let coordinator = DictationCoordinator(
             recorder: recorder,
             transcriber: transcriber,
+            commandProcessor: commandProcessor,
             injector: injector,
             notifier: notifier,
             onEvent: { events.record($0) }
         )
-        return (coordinator, transcriber, injector, recorder, notifier)
+        return (coordinator, transcriber, commandProcessor, injector, recorder, notifier)
     }
 
     /// Collects coordinator events across await points.
@@ -121,7 +126,7 @@ struct DictationCoordinatorTests {
 
     @Test
     func happyPathIdleThroughInjectingBackToIdle() async throws {
-        let (coordinator, transcriber, injector, recorder, notifier) = makePipeline()
+        let (coordinator, transcriber, _, injector, recorder, notifier) = makePipeline()
         transcriber.markReady()
         transcriber.cannedResult = .success("hello world")
 
@@ -142,7 +147,7 @@ struct DictationCoordinatorTests {
 
     @Test
     func emptyTranscriptIsASilentNoOp() async throws {
-        let (coordinator, transcriber, injector, _, notifier) = makePipeline()
+        let (coordinator, transcriber, _, injector, _, notifier) = makePipeline()
         transcriber.markReady()
         transcriber.cannedResult = .success("   \n  ")
 
@@ -158,7 +163,7 @@ struct DictationCoordinatorTests {
     @Test
     func transcriptionFailureNotifiesAndReturnsToIdle() async throws {
         struct Boom: Error {}
-        let (coordinator, transcriber, injector, _, notifier) = makePipeline()
+        let (coordinator, transcriber, _, injector, _, notifier) = makePipeline()
         transcriber.markReady()
         transcriber.cannedResult = .failure(Boom())
 
@@ -173,7 +178,7 @@ struct DictationCoordinatorTests {
 
     @Test
     func injectionRefusalNotifiesClipboardFallback() async throws {
-        let (coordinator, transcriber, injector, _, notifier) = makePipeline()
+        let (coordinator, transcriber, _, injector, _, notifier) = makePipeline()
         transcriber.markReady()
         transcriber.cannedResult = .success("the transcript")
         injector.result = .success(false)  // poster failed; text on clipboard
@@ -191,7 +196,7 @@ struct DictationCoordinatorTests {
     @Test
     func recorderStartFailureFailsWithoutRecording() async {
         struct Boom: Error {}
-        let (coordinator, _, _, recorder, notifier) = makePipeline()
+        let (coordinator, _, _, _, recorder, notifier) = makePipeline()
         recorder.startError = Boom()
 
         coordinator.toggle()
@@ -203,7 +208,7 @@ struct DictationCoordinatorTests {
 
     @Test
     func toggleDuringProcessingIsIgnored() async throws {
-        let (coordinator, transcriber, injector, recorder, _) = makePipeline()
+        let (coordinator, transcriber, _, injector, recorder, _) = makePipeline()
         transcriber.markReady()
         transcriber.cannedResult = .success("first utterance")
 
@@ -226,5 +231,92 @@ struct DictationCoordinatorTests {
         coordinator.toggle()
         #expect(coordinator.state == .recording)
         _ = try recorder.stop()
+    }
+
+    // MARK: - Command mode
+
+    @Test
+    func commandModeProcessesTranscriptBeforeInjection() async throws {
+        let (coordinator, transcriber, processor, injector, _, notifier) = makePipeline()
+        transcriber.markReady()
+        transcriber.cannedResult = .success("apples bananas cherries")
+        processor.result = .success("• apples\n• bananas\n• cherries")
+
+        coordinator.toggle(command: true)
+        #expect(coordinator.state == .recording)
+        coordinator.toggle()
+        #expect(coordinator.state == .transcribing)
+
+        await settle()
+
+        #expect(coordinator.state == .idle)
+        #expect(processor.inputs == ["apples bananas cherries"])
+        #expect(injector.insertions == ["• apples\n• bananas\n• cherries"])
+        #expect(notifier.notices.isEmpty)
+    }
+
+    @Test
+    func commandModeFailureFallsBackToVerbatim() async throws {
+        struct Boom: Error {}
+        let (coordinator, transcriber, processor, injector, _, notifier) = makePipeline()
+        transcriber.markReady()
+        transcriber.cannedResult = .success("apples bananas cherries")
+        processor.result = .failure(Boom())
+
+        coordinator.toggle(command: true)
+        coordinator.toggle()
+        await settle()
+
+        #expect(coordinator.state == .idle)
+        #expect(injector.insertions == ["apples bananas cherries"])
+        #expect(notifier.notices.count == 1)
+        #expect(notifier.notices.first?.body.contains("verbatim") == true)
+    }
+
+    @Test
+    func plainDictationNeverInvokesTheProcessor() async throws {
+        let (coordinator, transcriber, processor, injector, _, _) = makePipeline()
+        transcriber.markReady()
+        transcriber.cannedResult = .success("verbatim words")
+
+        coordinator.toggle()
+        coordinator.toggle()
+        await settle()
+
+        #expect(processor.inputs.isEmpty)
+        #expect(injector.insertions == ["verbatim words"])
+    }
+
+    @Test
+    func stopTapInheritsTheLatchedMode() async throws {
+        // Starting with the command chord and stopping with a plain tap
+        // must still run command mode — the mode belongs to the recording.
+        let (coordinator, transcriber, processor, injector, _, _) = makePipeline()
+        transcriber.markReady()
+        transcriber.cannedResult = .success("raw words")
+        processor.result = .success("cleaned")
+
+        coordinator.toggle(command: true)
+        coordinator.toggle()  // stop, no command flag
+        await settle()
+
+        #expect(processor.inputs == ["raw words"])
+        #expect(injector.insertions == ["cleaned"])
+    }
+
+    @Test
+    func commandModeWithEmptyTranscriptStaysANoOp() async throws {
+        let (coordinator, transcriber, processor, injector, _, notifier) = makePipeline()
+        transcriber.markReady()
+        transcriber.cannedResult = .success("   ")
+
+        coordinator.toggle(command: true)
+        coordinator.toggle()
+        await settle()
+
+        #expect(coordinator.state == .idle)
+        #expect(processor.inputs.isEmpty)
+        #expect(injector.insertions.isEmpty)
+        #expect(notifier.notices.isEmpty)
     }
 }

@@ -51,9 +51,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var coordinator: DictationCoordinator?
     private var hotkeyWatcher: HotkeyWatcher?
     private var transcriber: (any Transcriber)?
+    private var commandProcessor: (any CommandProcessor)?
 
     private var microphonePermission: MicrophonePermission = .unknown
     private var watcherStarted = false
+
+    /// Apple Intelligence availability, refreshed at launch and whenever
+    /// the menu opens. Gates the command chord only; plain dictation works
+    /// with it off.
+    private var commandModeAvailable = false
 
     /// The transcriber's settled state, kept current by the warm-up task so
     /// a grant that arrives late doesn't park the menu bar at "warming".
@@ -73,9 +79,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let transcriber = FluidAudioTranscriber.start(modelDirectory: modelDirectory)
         self.transcriber = transcriber
 
+        let commandProcessor = FoundationModelCommandProcessor()
+        self.commandProcessor = commandProcessor
+
         let coordinator = DictationCoordinator(
             recorder: Recorder(),
             transcriber: transcriber,
+            commandProcessor: commandProcessor,
             injector: ClipboardInjector(),
             notifier: UserNotifier(),
             onEvent: { [weak self] event in
@@ -97,6 +107,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
 
+        refreshCommandModeAvailability()
         installHotkeyWatcherOrPromptForAccessibility(prompt: true)
     }
 
@@ -116,6 +127,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             onToggle: { [weak self] in self?.toggle() },
             onRecheckAccessibility: { [weak self] in
                 self?.installHotkeyWatcherOrPromptForAccessibility(prompt: false)
+                self?.refreshCommandModeAvailability()
             },
             onQuit: { NSApplication.shared.terminate(nil) }
         )
@@ -142,8 +154,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
 
-        let watcher = HotkeyWatcher { [weak self] in
-            self?.toggle()
+        let watcher = HotkeyWatcher { [weak self] mode in
+            self?.toggle(command: mode == .command)
         }
         do {
             try watcher.start()
@@ -192,12 +204,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: - Interaction
 
-    private func toggle() {
+    private func toggle(command: Bool = false) {
         guard let coordinator else { return }
+
+        // Command mode is unavailable when Apple Intelligence is off or its
+        // assets are not ready. Refuse before recording — nothing to lose,
+        // and the plain chord still dictates verbatim.
+        if command && !commandModeAvailable {
+            Task {
+                await UserNotifier().notify(
+                    title: "Pfeifer",
+                    body: "Command mode needs Apple Intelligence — plain dictation still works.")
+            }
+            return
+        }
 
         switch microphonePermission {
         case .granted:
-            coordinator.toggle()
+            coordinator.toggle(command: command)
         case .denied:
             showMicrophoneDenied()
         case .unknown:
@@ -207,7 +231,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             switch Recorder.microphoneStatus() {
             case .granted:
                 microphonePermission = .granted
-                coordinator.toggle()
+                coordinator.toggle(command: command)
             case .denied:
                 showMicrophoneDenied()
             case .undetermined:
@@ -217,12 +241,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     guard let self else { return }
                     self.microphonePermission = granted ? .granted : .denied
                     if granted {
-                        self.coordinator?.toggle()
+                        self.coordinator?.toggle(command: command)
                     } else {
                         self.showMicrophoneDenied()
                     }
                 }
             }
+        }
+    }
+
+    /// Refresh the cached Apple Intelligence availability. Cheap and
+    /// non-blocking; called at launch and on each menu open.
+    private func refreshCommandModeAvailability() {
+        guard let commandProcessor else { return }
+        Task { [weak self] in
+            let available = await commandProcessor.isAvailable
+            self?.commandModeAvailable = available
         }
     }
 
@@ -243,6 +277,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             case .idle: statusItem?.display = .ready
             case .recording: statusItem?.display = .recording
             case .transcribing: statusItem?.display = .transcribing
+            case .processing: statusItem?.display = .processing
             case .injecting: statusItem?.display = .injecting
             }
         case .failed(let reason):

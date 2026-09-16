@@ -22,7 +22,14 @@ public final class HotkeyWatcher {
         case tapCreationFailed
     }
 
-    public typealias ChordHandler = @MainActor @Sendable () -> Void
+    public typealias ChordHandler = @MainActor @Sendable (ChordMode) -> Void
+
+    /// Which pipeline the chord engages. Plain Right-⌥+Space dictates
+    /// verbatim; adding Shift makes it a one-shot command-mode utterance.
+    public enum ChordMode: Equatable, Sendable {
+        case dictation
+        case command
+    }
 
     /// kVK_RightOption — not in the public SDK headers as a constant.
     nonisolated public static let rightOptionKeyCode: CGKeyCode = 61  // 0x3D
@@ -99,22 +106,25 @@ public final class HotkeyWatcher {
         case rightOptionUp
         /// A Space keyDown while Right-⌥ is held; `autorepeat` distinguishes
         /// the initial press from held-down repeats (both are swallowed).
-        case chordSpace(autorepeat: Bool)
+        /// `mode` reflects whether Shift was also held (command mode).
+        case chordSpace(autorepeat: Bool, mode: ChordMode)
         case other
     }
 
-    /// Classify a keyboard event against the Right-⌥+Space chord.
+    /// Classify a keyboard event against the Right-⌥(+Shift)+Space chord.
     /// Pure function of the event's fields — unit-tested with synthetic
     /// CGEvents, no tap or Accessibility trust needed. `rightOptionDown`
     /// is the watcher's tracked state (used for Space); the right-⌥ device
     /// bit itself is only carried by flagsChanged events, so
-    /// `rightOptionDeviceDown` is consulted for those alone.
+    /// `rightOptionDeviceDown` is consulted for those alone. `shiftDown`
+    /// is read from the event's flags and only selects the chord's mode.
     nonisolated public static func classify(
         type: CGEventType,
         keyCode: Int64,
         autorepeat: Bool,
         rightOptionDown: Bool,
-        rightOptionDeviceDown: Bool = false
+        rightOptionDeviceDown: Bool = false,
+        shiftDown: Bool = false
     ) -> EventClass {
         // Modifiers arrive as flagsChanged: the keycode names the modifier
         // that changed and the event's flag bits hold its new state.
@@ -133,7 +143,9 @@ public final class HotkeyWatcher {
             return .other
         case Int64(spaceKeyCode):
             if isKeyDown && rightOptionDown {
-                return .chordSpace(autorepeat: autorepeat)
+                return .chordSpace(
+                    autorepeat: autorepeat,
+                    mode: shiftDown ? .command : .dictation)
             }
             return .other
         default:
@@ -152,7 +164,8 @@ public final class HotkeyWatcher {
         type: CGEventType,
         keyCode: Int64,
         autorepeat: Bool,
-        rightOptionDeviceDown: Bool
+        rightOptionDeviceDown: Bool,
+        shiftDown: Bool
     ) -> Bool {
         switch type {
         case .tapDisabledByTimeout:
@@ -168,7 +181,8 @@ public final class HotkeyWatcher {
                 keyCode: keyCode,
                 autorepeat: autorepeat,
                 rightOptionDown: rightOptionDown,
-                rightOptionDeviceDown: rightOptionDeviceDown
+                rightOptionDeviceDown: rightOptionDeviceDown,
+                shiftDown: shiftDown
             ) {
             case .rightOptionDown:
                 rightOptionDown = true
@@ -176,10 +190,10 @@ public final class HotkeyWatcher {
             case .rightOptionUp:
                 rightOptionDown = false
                 return false
-            case .chordSpace:
+            case .chordSpace(_, let mode):
                 // Swallow the chord (and its autorepeats) and toggle.
                 if !autorepeat {
-                    onChord()
+                    onChord(mode)
                 }
                 return true
             case .other:
@@ -211,12 +225,14 @@ private func pfeiferChordTapCallback(
     let autorepeat = event.getIntegerValueField(.keyboardEventAutorepeat) != 0
     let rightOptionDeviceDown =
         event.flags.rawValue & HotkeyWatcher.rightOptionDeviceFlag.rawValue != 0
+    let shiftDown = event.flags.contains(.maskShift)
     let swallow: Bool = MainActor.assumeIsolated {
         watcher.shouldSwallow(
             type: type,
             keyCode: keyCode,
             autorepeat: autorepeat,
-            rightOptionDeviceDown: rightOptionDeviceDown
+            rightOptionDeviceDown: rightOptionDeviceDown,
+            shiftDown: shiftDown
         )
     }
     return swallow ? nil : Unmanaged.passUnretained(event)
