@@ -17,7 +17,9 @@ disambiguate the two — tap toggles a batch recording, hold streams.
 
 When command mode is active, the transcript is first post-processed by
 the on-device Foundation Model (cleanup, reformatting, commands) before
-insertion. When it is off, plain dictation is inserted verbatim.
+insertion. When it is off, plain dictation is inserted verbatim. Command
+mode is a one-shot: hold Shift with the chord (Right-⌥+⇧+Space) and only
+that utterance is post-processed.
 
 ## Guarantees
 

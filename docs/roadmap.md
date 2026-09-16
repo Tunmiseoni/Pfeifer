@@ -121,8 +121,25 @@ transcript.
 
 ## Phase 2 — Command mode
 
-Apple Foundation Models integration: an opt-in mode (modifier-hold or spoken
-prefix — decide here) that post-processes the transcript before insertion.
+Apple Foundation Models integration: an opt-in mode that post-processes the
+transcript before insertion.
+
+Trigger (decided): a **one-shot chord** — Right-⌥+⇧+Space for the current
+utterance only. Right-⌥+Space stays verbatim dictation. No spoken prefix
+(Phase 0 showed "Pfeifer" garbles in ASR, and wake-detection would add
+latency to every utterance) and no persistent mode (too easy to leave on
+and silently rewrite verbatim text).
+
+Scope (v1): the **captured transcript is the input**; any instruction in it
+("…reformat this as a bullet list") is applied and the result replaces the
+utterance. The focused app's existing selection is not read or replaced yet
+— that is the Phase 3 selection-aware extension.
+
+Behavior: command mode is available only with Apple Intelligence; when it
+is off or its assets are not ready, the command chord refuses before
+recording and notifies, and plain dictation still works. If generation
+fails, the raw transcript is inserted verbatim with a notice — the
+transcript is never lost.
 
 Exit: "reformat this as a bullet list" works end-to-end, on-device.
 
@@ -135,6 +152,10 @@ Exit: "reformat this as a bullet list" works end-to-end, on-device.
   by press duration
 - Transcript history
 - Per-app injection improvements (AXUIElement)
+- Selection-aware command mode: read the focused app's current selection
+  (`AXSelectedText`) as LLM context, so "reformat this as a bullet list"
+  acts on existing text rather than only the captured utterance, then
+  replace the selection with the result
 
 ## Explicitly not on the roadmap
 
