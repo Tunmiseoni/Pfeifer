@@ -3,11 +3,11 @@
 # `make clean`, or directly: scripts/clean.sh [--dry-run] [--app]
 # [--models] [--global].
 #
-# Default targets: .build/ and benchmark/.build/ (SwiftPM) plus stray
-# .DS_Store files. Pfeifer.app and models/ are kept by default — the
-# app bundle is the runnable product, and the model weights are a
-# manual ~GB re-download; both have opt-in flags. Never touched:
-# Package.resolved (pins dependencies), benchmark/clips/ (personal
+# Default targets: .build/ in the root and every package (benchmark/,
+# experiments/*) plus stray .DS_Store files. Pfeifer.app and models/ are
+# kept by default — the app bundle is the runnable product, and the model
+# weights are a manual ~GB re-download; both have opt-in flags. Never
+# touched: Package.resolved (pins dependencies), benchmark/clips/ (personal
 # recordings), sources, docs, .git.
 #
 # Deleting .build/ makes the next `swift build` a full rebuild — this
@@ -97,6 +97,13 @@ fi
 
 remove_target "$ROOT/.build" "SwiftPM build dir"
 remove_target "$ROOT/benchmark/.build" "SwiftPM build dir"
+
+# Every standalone package under experiments/ has its own .build.
+if [[ -d "$ROOT/experiments" ]]; then
+  while IFS= read -r dir; do
+    [[ -n "$dir" ]] && remove_target "$dir" "SwiftPM build dir"
+  done < <(find "$ROOT/experiments" -mindepth 2 -maxdepth 2 -type d -name .build)
+fi
 
 if [[ $WITH_APP -eq 1 ]]; then
   remove_target "$ROOT/Pfeifer.app" "app bundle"
