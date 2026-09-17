@@ -8,7 +8,7 @@ final class MockCommandProcessor: CommandProcessor, @unchecked Sendable {
     private let lock = NSLock()
     private var _available = true
     private var _result: Result<String, Error> = .success("processed transcript")
-    private(set) var inputs: [String] = []
+    private(set) var calls: [(content: String, transform: Transform)] = []
 
     var available: Bool {
         get { lock.withLock { _available } }
@@ -24,9 +24,19 @@ final class MockCommandProcessor: CommandProcessor, @unchecked Sendable {
         get async { lock.withLock { _available } }
     }
 
-    func process(_ transcript: String) async throws -> String {
+    /// The content of each call, for tests that don't care about the transform.
+    var inputs: [String] {
+        lock.withLock { calls.map(\.content) }
+    }
+
+    /// The transform of each call.
+    var transforms: [Transform] {
+        lock.withLock { calls.map(\.transform) }
+    }
+
+    func process(_ content: String, transform: Transform) async throws -> String {
         try lock.withLock {
-            inputs.append(transcript)
+            calls.append((content, transform))
             return try _result.get()
         }
     }
@@ -35,15 +45,34 @@ final class MockCommandProcessor: CommandProcessor, @unchecked Sendable {
 /// The concrete backend needs Apple Intelligence to run, so its behavior
 /// is exercised manually (see docs/roadmap.md Phase 2). These tests only
 /// pin the parts that are model-independent: the error vocabulary and the
-/// instruction contract the model is handed.
+/// per-transform instruction contract the model is handed.
 @Suite
 struct FoundationModelCommandProcessorTests {
     @Test
-    func instructionsDescribeThePostProcessorContract() {
-        let text = FoundationModelCommandProcessor.instructions
-        #expect(!text.isEmpty)
-        #expect(text.localizedCaseInsensitiveContains("post-processor"))
-        #expect(text.localizedCaseInsensitiveContains("unchanged"))
+    func everyTransformHasNonEmptyNarrowInstructions() {
+        for transform in Transform.allCases {
+            let text = CommandTemplates.instruction(for: transform)
+            #expect(!text.isEmpty, "\(transform) has no instruction")
+            #expect(
+                text.localizedCaseInsensitiveContains("Output only"),
+                "\(transform) instruction must constrain the output")
+        }
+    }
+
+    @Test
+    func cleanupInstructionCoversFalseStartsAndPreservesFacts() {
+        let text = CommandTemplates.instruction(for: .cleanup)
+        #expect(text.localizedCaseInsensitiveContains("false start"))
+        #expect(text.localizedCaseInsensitiveContains("fact"))
+    }
+
+    @Test
+    func requiresSelectionIsTrueOnlyForContentlessTransforms() {
+        #expect(Transform.summarize.requiresSelection)
+        #expect(Transform.rewrite.requiresSelection)
+        #expect(Transform.fix.requiresSelection)
+        #expect(Transform.bullets.requiresSelection == false)
+        #expect(Transform.cleanup.requiresSelection == false)
     }
 
     @Test

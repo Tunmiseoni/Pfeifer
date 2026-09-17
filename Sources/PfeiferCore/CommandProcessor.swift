@@ -9,10 +9,13 @@ public protocol CommandProcessor: Sendable {
     /// this must be cheap and callable before every command utterance.
     var isAvailable: Bool { get async }
 
-    /// Rewrite `transcript` per any instruction it contains.
+    /// Rewrite `content` with the instruction for `transform`.
+    ///
+    /// The transform is decided by `CommandGrammar`, not by the model: the
+    /// content stream carries no instruction, so nothing in it can be executed.
     /// - Throws: `CommandProcessorError` when the model is unavailable or
     ///   generation fails; callers fall back to the raw transcript.
-    func process(_ transcript: String) async throws -> String
+    func process(_ content: String, transform: Transform) async throws -> String
 }
 
 public enum CommandProcessorError: Error, Equatable, Sendable {
@@ -29,23 +32,13 @@ public enum CommandProcessorError: Error, Equatable, Sendable {
 /// Intelligence is unavailable, `process` throws `.unavailable` and the
 /// caller inserts the verbatim transcript.
 ///
-/// A fresh `LanguageModelSession` is built per utterance so instructions
-/// and prior commands never accumulate across dictations. Generation is
-/// greedy and token-bounded to keep command mode deterministic and inside
-/// the model's small (4096-token) context window.
+/// A fresh `LanguageModelSession` is built per utterance so instructions and
+/// prior commands never accumulate across dictations. The system instruction
+/// is the narrow template for the transform the caller resolved; the user
+/// message is only the content to rewrite. Generation is greedy and
+/// token-bounded to keep command mode deterministic and inside the model's
+/// small (4096-token) context window.
 public actor FoundationModelCommandProcessor: CommandProcessor {
-    /// The whole job in one system instruction: apply any instruction found
-    /// in the transcript, return only the resulting text. Stability matters
-    /// more than elegance here — this is the contract the model sees.
-    static let instructions = """
-        You are a dictation post-processor. The user message is a raw speech \
-        transcript that may contain an instruction about how to rewrite or \
-        format the text. Apply that instruction and output only the resulting \
-        text. Do not add commentary, explanations, quotation marks, or code \
-        fences. If the transcript contains no instruction, return it unchanged \
-        with only obvious cleanup (capitalization and punctuation).
-        """
-
     private static let maximumResponseTokens = 1024
 
     public init() {}
@@ -56,21 +49,21 @@ public actor FoundationModelCommandProcessor: CommandProcessor {
         }
     }
 
-    public func process(_ transcript: String) async throws -> String {
+    public func process(_ content: String, transform: Transform) async throws -> String {
         guard SystemLanguageModel.default.isAvailable else {
             throw CommandProcessorError.unavailable
         }
 
         let session = LanguageModelSession(
             model: SystemLanguageModel.default,
-            instructions: Instructions(Self.instructions))
+            instructions: Instructions(CommandTemplates.instruction(for: transform)))
         let options = GenerationOptions(
             samplingMode: .greedy,
             maximumResponseTokens: Self.maximumResponseTokens)
 
         let response: String
         do {
-            response = try await session.respond(to: transcript, options: options).content
+            response = try await session.respond(to: content, options: options).content
         } catch {
             throw CommandProcessorError.generationFailed(String(describing: error))
         }

@@ -107,7 +107,9 @@ public final class DictationCoordinator {
         if command {
             transition(to: .processing)
             do {
-                finalText = try await commandProcessor.process(trimmed)
+                // Phase B compatibility while the decision table lands in
+                // Phase C: command mode currently always cleans up.
+                finalText = try await commandProcessor.process(trimmed, transform: .cleanup)
             } catch {
                 // The words are still good — insert them verbatim rather
                 // than lose the utterance to an LLM failure.
