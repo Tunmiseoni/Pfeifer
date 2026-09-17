@@ -129,8 +129,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 self?.installHotkeyWatcherOrPromptForAccessibility(prompt: false)
                 self?.refreshCommandModeAvailability()
             },
+            onCopyRawTranscript: { [weak self] in
+                self?.copyToPasteboard(self?.coordinator?.lastRawTranscript)
+            },
+            onCopyInsertedText: { [weak self] in
+                self?.copyToPasteboard(self?.coordinator?.lastInsertedText)
+            },
+            hasRecovery: { [weak self] in
+                (self?.coordinator?.lastRawTranscript != nil,
+                    self?.coordinator?.lastInsertedText != nil)
+            },
             onQuit: { NSApplication.shared.terminate(nil) }
         )
+    }
+
+    /// Recovery path for the transform branch of command mode: the raw
+    /// transcript and the inserted text are both retrievable from the menu.
+    private func copyToPasteboard(_ text: String?) {
+        guard let text else { return }
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(text, forType: .string)
     }
 
     /// The Accessibility gate: request the system dialog at most once per

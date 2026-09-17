@@ -25,10 +25,15 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     private let statusItem: NSStatusItem
     private let onToggle: () -> Void
     private let onRecheckAccessibility: () -> Void
+    private let onCopyRawTranscript: () -> Void
+    private let onCopyInsertedText: () -> Void
+    private let hasRecovery: () -> (raw: Bool, inserted: Bool)
     private let onQuit: () -> Void
 
     private let statusLine: NSMenuItem
     private let toggleLine: NSMenuItem
+    private let copyRawLine: NSMenuItem
+    private let copyInsertedLine: NSMenuItem
     private let recheckLine: NSMenuItem
     private let hintLine: NSMenuItem
 
@@ -43,12 +48,18 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         initialDisplay: Display,
         onToggle: @escaping () -> Void,
         onRecheckAccessibility: @escaping () -> Void,
+        onCopyRawTranscript: @escaping () -> Void,
+        onCopyInsertedText: @escaping () -> Void,
+        hasRecovery: @escaping () -> (raw: Bool, inserted: Bool),
         onQuit: @escaping () -> Void
     ) {
         self.statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         self.display = initialDisplay
         self.onToggle = onToggle
         self.onRecheckAccessibility = onRecheckAccessibility
+        self.onCopyRawTranscript = onCopyRawTranscript
+        self.onCopyInsertedText = onCopyInsertedText
+        self.hasRecovery = hasRecovery
         self.onQuit = onQuit
 
         let menu = NSMenu()
@@ -62,6 +73,17 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         toggleLine = NSMenuItem(title: "", action: #selector(toggleClicked), keyEquivalent: "")
         menu.addItem(toggleLine)
 
+        copyRawLine = NSMenuItem(
+            title: "Copy last raw transcript", action: #selector(copyRawClicked),
+            keyEquivalent: "")
+        menu.addItem(copyRawLine)
+
+        copyInsertedLine = NSMenuItem(
+            title: "Copy last inserted text", action: #selector(copyInsertedClicked),
+            keyEquivalent: "")
+        menu.addItem(copyInsertedLine)
+
+        menu.addItem(.separator())
         recheckLine = NSMenuItem(
             title: "Recheck Accessibility…", action: #selector(recheckClicked),
             keyEquivalent: "")
@@ -84,6 +106,8 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         super.init()
 
         toggleLine.target = self
+        copyRawLine.target = self
+        copyInsertedLine.target = self
         recheckLine.target = self
         quitLine.target = self
         menu.delegate = self
@@ -95,12 +119,21 @@ final class StatusItemController: NSObject, NSMenuDelegate {
 
     func menuWillOpen(_ menu: NSMenu) {
         onRecheckAccessibility()
+        refreshRecoveryItems()
     }
 
     // MARK: - Actions
 
     @objc private func toggleClicked() {
         onToggle()
+    }
+
+    @objc private func copyRawClicked() {
+        onCopyRawTranscript()
+    }
+
+    @objc private func copyInsertedClicked() {
+        onCopyInsertedText()
     }
 
     @objc private func recheckClicked() {
@@ -121,6 +154,13 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         toggleLine.title = isRecording ? "Stop dictation" : "Start dictation"
         recheckLine.isHidden = display != .accessibilityNeeded
         hintLine.isHidden = display != .accessibilityNeeded
+        refreshRecoveryItems()
+    }
+
+    private func refreshRecoveryItems() {
+        let availability = hasRecovery()
+        copyRawLine.isEnabled = availability.raw
+        copyInsertedLine.isEnabled = availability.inserted
     }
 
     private var isRecording: Bool {

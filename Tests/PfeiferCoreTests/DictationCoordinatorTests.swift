@@ -69,7 +69,8 @@ struct DictationCoordinatorTests {
         commandProcessor: MockCommandProcessor = MockCommandProcessor(),
         injector: MockInjector = MockInjector(),
         recorder: MockRecorder = MockRecorder(),
-        notifier: MockNotifier = MockNotifier()
+        notifier: MockNotifier = MockNotifier(),
+        spokenPunctuationEnabled: Bool = true
     ) -> (
         DictationCoordinator, MockTranscriber, MockCommandProcessor, MockInjector, MockRecorder,
         MockNotifier
@@ -81,6 +82,7 @@ struct DictationCoordinatorTests {
             commandProcessor: commandProcessor,
             injector: injector,
             notifier: notifier,
+            spokenPunctuationEnabled: { spokenPunctuationEnabled },
             onEvent: { events.record($0) }
         )
         return (coordinator, transcriber, commandProcessor, injector, recorder, notifier)
@@ -233,14 +235,14 @@ struct DictationCoordinatorTests {
         _ = try recorder.stop()
     }
 
-    // MARK: - Command mode
+    // MARK: - Command mode: cleanup path
 
     @Test
-    func commandModeProcessesTranscriptBeforeInjection() async throws {
+    func commandModeWithNoTriggerRunsCleanup() async throws {
         let (coordinator, transcriber, processor, injector, _, notifier) = makePipeline()
         transcriber.markReady()
         transcriber.cannedResult = .success("apples bananas cherries")
-        processor.result = .success("• apples\n• bananas\n• cherries")
+        processor.result = .success("Apples, bananas, cherries.")
 
         coordinator.toggle(command: true)
         #expect(coordinator.state == .recording)
@@ -250,17 +252,18 @@ struct DictationCoordinatorTests {
         await settle()
 
         #expect(coordinator.state == .idle)
+        #expect(processor.transforms == [.cleanup])
         #expect(processor.inputs == ["apples bananas cherries"])
-        #expect(injector.insertions == ["• apples\n• bananas\n• cherries"])
+        #expect(injector.insertions == ["Apples, bananas, cherries."])
         #expect(notifier.notices.isEmpty)
     }
 
     @Test
-    func commandModeFailureFallsBackToVerbatim() async throws {
+    func cleanupFailureInsertsDeterministicCleanup() async throws {
         struct Boom: Error {}
         let (coordinator, transcriber, processor, injector, _, notifier) = makePipeline()
         transcriber.markReady()
-        transcriber.cannedResult = .success("apples bananas cherries")
+        transcriber.cannedResult = .success("I I went to the shop")
         processor.result = .failure(Boom())
 
         coordinator.toggle(command: true)
@@ -268,9 +271,131 @@ struct DictationCoordinatorTests {
         await settle()
 
         #expect(coordinator.state == .idle)
-        #expect(injector.insertions == ["apples bananas cherries"])
+        // Deterministic cleanup removes the repetition; model failure must
+        // never lose the utterance.
+        #expect(injector.insertions == ["I went to the shop"])
         #expect(notifier.notices.count == 1)
         #expect(notifier.notices.first?.body.contains("verbatim") == true)
+    }
+
+    @Test
+    func guardRejectsFabricatedOutputAndKeepsTheUsersWords() async throws {
+        // The originally-reported failure: a command-shaped utterance was
+        // executed by the model, which returned a fabricated document.
+        let (coordinator, transcriber, processor, injector, _, notifier) = makePipeline()
+        transcriber.markReady()
+        let utterance =
+            "make these changes to agents.md, add an agent named Agent X and update the docs"
+        transcriber.cannedResult = .success(utterance)
+        processor.result = .success(
+            """
+            # Mini Agent.md
+
+            - Added an agent named Agent X
+            - Updated the docs
+            """)
+
+        coordinator.toggle(command: true)
+        coordinator.toggle()
+        await settle()
+
+        #expect(coordinator.state == .idle)
+        #expect(processor.transforms == [.cleanup])
+        // The guard rejects the fabrication and the user's actual words go
+        // in instead.
+        #expect(injector.insertions == [utterance])
+        #expect(notifier.notices.count == 1)
+        #expect(notifier.notices.first?.body.contains("wrong") == true)
+    }
+
+    // MARK: - Command mode: transform path
+
+    @Test
+    func transformUsesTheRemainderAsContent() async throws {
+        let (coordinator, transcriber, processor, injector, _, notifier) = makePipeline()
+        transcriber.markReady()
+        transcriber.cannedResult = .success("make this a bullet list apples bananas")
+        processor.result = .success("• apples\n• bananas")
+
+        coordinator.toggle(command: true)
+        coordinator.toggle()
+        await settle()
+
+        #expect(coordinator.state == .idle)
+        #expect(processor.calls.count == 1)
+        #expect(processor.calls.first?.transform == .bullets)
+        #expect(processor.calls.first?.content == "apples bananas")
+        #expect(injector.insertions == ["• apples\n• bananas"])
+        #expect(notifier.notices.isEmpty)
+    }
+
+    @Test
+    func transformFailureInsertsContentVerbatim() async throws {
+        struct Boom: Error {}
+        let (coordinator, transcriber, processor, injector, _, notifier) = makePipeline()
+        transcriber.markReady()
+        transcriber.cannedResult = .success("make this a bullet list apples bananas")
+        processor.result = .failure(Boom())
+
+        coordinator.toggle(command: true)
+        coordinator.toggle()
+        await settle()
+
+        #expect(coordinator.state == .idle)
+        #expect(injector.insertions == ["apples bananas"])
+        #expect(notifier.notices.count == 1)
+        #expect(notifier.notices.first?.body.contains("verbatim") == true)
+    }
+
+    @Test
+    func requiresSelectionTransformRefusesLoudly() async throws {
+        let (coordinator, transcriber, processor, injector, _, notifier) = makePipeline()
+        transcriber.markReady()
+        transcriber.cannedResult = .success("summarize this")
+
+        coordinator.toggle(command: true)
+        coordinator.toggle()
+        await settle()
+
+        #expect(coordinator.state == .idle)
+        #expect(processor.calls.isEmpty)
+        #expect(injector.insertions.isEmpty)
+        #expect(notifier.notices.count == 1)
+        #expect(notifier.notices.first?.body.contains("selected text") == true)
+    }
+
+    @Test
+    func emptyRemainderRefusesLoudly() async throws {
+        let (coordinator, transcriber, processor, injector, _, notifier) = makePipeline()
+        transcriber.markReady()
+        transcriber.cannedResult = .success("make this more concise")
+
+        coordinator.toggle(command: true)
+        coordinator.toggle()
+        await settle()
+
+        #expect(coordinator.state == .idle)
+        #expect(processor.calls.isEmpty)
+        #expect(injector.insertions.isEmpty)
+        #expect(notifier.notices.count == 1)
+    }
+
+    // MARK: - Command mode: shared behavior
+
+    @Test
+    func commandModeRetainsRawAndInsertedText() async throws {
+        let (coordinator, transcriber, processor, injector, _, _) = makePipeline()
+        transcriber.markReady()
+        transcriber.cannedResult = .success("make this a bullet list a b")
+        processor.result = .success("• a\n• b")
+
+        coordinator.toggle(command: true)
+        coordinator.toggle()
+        await settle()
+
+        #expect(coordinator.lastRawTranscript == "make this a bullet list a b")
+        #expect(coordinator.lastInsertedText == "• a\n• b")
+        #expect(injector.insertions == ["• a\n• b"])
     }
 
     @Test
@@ -283,7 +408,7 @@ struct DictationCoordinatorTests {
         coordinator.toggle()
         await settle()
 
-        #expect(processor.inputs.isEmpty)
+        #expect(processor.calls.isEmpty)
         #expect(injector.insertions == ["verbatim words"])
     }
 
@@ -294,14 +419,15 @@ struct DictationCoordinatorTests {
         let (coordinator, transcriber, processor, injector, _, _) = makePipeline()
         transcriber.markReady()
         transcriber.cannedResult = .success("raw words")
-        processor.result = .success("cleaned")
+        processor.result = .success("raw")  // a valid cleanup subsequence
 
         coordinator.toggle(command: true)
         coordinator.toggle()  // stop, no command flag
         await settle()
 
+        #expect(processor.transforms == [.cleanup])
         #expect(processor.inputs == ["raw words"])
-        #expect(injector.insertions == ["cleaned"])
+        #expect(injector.insertions == ["raw"])
     }
 
     @Test
@@ -315,8 +441,38 @@ struct DictationCoordinatorTests {
         await settle()
 
         #expect(coordinator.state == .idle)
-        #expect(processor.inputs.isEmpty)
+        #expect(processor.calls.isEmpty)
         #expect(injector.insertions.isEmpty)
         #expect(notifier.notices.isEmpty)
+    }
+
+    // MARK: - Spoken punctuation
+
+    @Test
+    func plainDictationAppliesSpokenPunctuation() async throws {
+        let (coordinator, transcriber, _, injector, _, _) = makePipeline()
+        transcriber.markReady()
+        transcriber.cannedResult = .success("quote hello world unquote")
+
+        coordinator.toggle()
+        coordinator.toggle()
+        await settle()
+
+        #expect(injector.insertions == ["\"hello world\""])
+        #expect(coordinator.lastRawTranscript == "\"hello world\"")
+    }
+
+    @Test
+    func spokenPunctuationCanBeDisabled() async throws {
+        let (coordinator, transcriber, _, injector, _, _) = makePipeline(
+            spokenPunctuationEnabled: false)
+        transcriber.markReady()
+        transcriber.cannedResult = .success("quote hello world unquote")
+
+        coordinator.toggle()
+        coordinator.toggle()
+        await settle()
+
+        #expect(injector.insertions == ["quote hello world unquote"])
     }
 }

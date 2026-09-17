@@ -99,5 +99,7 @@ guarantee more severely than a stray "Sure,".
   not by the model.
 - Retest the stripper against a larger corpus of real failures before
   trusting its coverage.
-- The harness (`CommandModeBench`) is throwaway; delete it or fold the corpus
-  into a permanent test once a decision is made.
+- The harness (`CommandModeBench`) was throwaway and has been deleted
+  (`experiments/command-mode`); the findings it produced live on in
+  `docs/design-command-mode.md`, and the motivating failure is pinned as a
+  permanent regression test (`guardRejectsFabricatedOutputAndKeepsTheUsersWords`).
