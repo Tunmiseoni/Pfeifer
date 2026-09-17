@@ -73,3 +73,6 @@ models/
 
 # benchmark audio clips (personal voice recordings)
 benchmark/clips/
+
+# local agent session notes / plans
+.opencode/
