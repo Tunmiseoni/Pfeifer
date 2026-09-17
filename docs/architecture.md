@@ -23,13 +23,16 @@ Flow:
    `transcribe(audio) -> String`. The concrete backend is chosen by the
    Phase 0 benchmark (below). v1 is batch: the full clip is transcribed once
    after key release.
-4. **CommandMode** — off by default. When active, the transcript is passed
-   to the on-device Foundation Model (`FoundationModels` framework) for
-   post-processing before insertion. A one-shot chord (Right-⌥+⇧+Space)
+4. **CommandMode** — off by default. A one-shot chord (Right-⌥+⇧+Space)
    activates it for a single utterance; plain dictation never passes
-   through the LLM. Behind `protocol CommandProcessor`, so the coordinator
-   is testable without Apple Intelligence and a cloud provider could later
-   sit behind the same seam.
+   through the LLM. The instruction/content boundary is decided in our code,
+   not by the model: a readable selection makes the utterance an
+   instruction over that selection, a leading spoken trigger selects a
+   bounded transform, and otherwise the utterance gets a cleanup pass.
+   Each transform is its own narrow prompt template behind
+   `protocol CommandProcessor`, so the coordinator is testable without
+   Apple Intelligence. Full design and rationale:
+   `docs/design-command-mode.md`.
 5. **Injector** — writes text at the cursor of the focused app: save the
    current pasteboard → set it to the transcript → synthesize ⌘V via
    CGEvent → restore the previous pasteboard contents. On any failure (no
@@ -44,7 +47,7 @@ Flow:
 | Distribution | Direct (Developer ID), non-sandboxed, never App Store | Global hotkeys and CGEvent injection require Accessibility trust and no sandbox |
 | ASR | Local Parakeet behind `protocol Transcriber` | Swappable runtime; chosen by benchmark, not vibes |
 | LLM usage | Opt-in command mode only | Always-on rewriting adds latency to every utterance and mangles verbatim text |
-| Command-mode trigger | One-shot Right-⌥+⇧+Space; transcript is the only input in v1 | A modifier chord is deterministic and needs no ASR reinterpretation (a spoken prefix relies on a wake word that already garbles); one-shot avoids a persistent mode that silently rewrites verbatim dictation. Reading the focused selection is deferred to Phase 3 |
+| Command-mode trigger | One-shot Right-⌥+⇧+Space; boundary decided by selection + leading spoken grammar | A modifier chord is deterministic and needs no ASR reinterpretation. The instruction/content boundary cannot be left to the model — the transcript carries both roles — so it is resolved from source (selection) or a leading trigger phrase, and content-shaped instructions are never executed. Details: `docs/design-command-mode.md` |
 | Injection | Pasteboard + simulated ⌘V, restore after | Most cross-app compatible; keystroke-by-keystroke is slow and breaks some apps |
 | Transcripts | Never silently lost — clipboard fallback + notification | A dropped dictation destroys trust in the tool |
 | v1 interaction | Tap-toggle on the Right-⌥+Space chord | Batch-first: the core loop is proven end-to-end before streaming exists. Hold-to-stream arrives in Phase 3, disambiguated from tapping by press duration; the chosen model (Parakeet Unified EN) already has the streaming export for it |
@@ -117,13 +120,15 @@ the same stability.
 
 Unresolved by design, to be settled when their phase arrives:
 
-- Command-mode trigger (modifier-hold vs spoken prefix)
 - Streaming partial transcript design
 - Per-app AXUIElement injection improvements
-- Selection-aware command mode (read `AXSelectedText` as LLM context and
-  replace the selection, so commands act on existing text, not just the
-  captured utterance)
 - Transcript history
+- **Background / cross-app insertion (deferred).** Fire a command, switch to
+  another app and keep working, and have the result land in the original
+  target. Synthetic ⌘V cannot address a non-focused app; the only universal
+  mechanism is focus-stealing, which interrupts the user. True background
+  insertion requires an AX-direct write into a writable text element, which
+  not all apps expose. See `docs/design-command-mode.md`.
 - Multi-language support
 - Personalization (deferred): Parakeet is a fixed pretrained model — the same
   weights on every utterance, with no adaptation to the speaker or their
