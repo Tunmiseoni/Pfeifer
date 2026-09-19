@@ -19,7 +19,8 @@ Hotkey ──▶ Recorder ──▶ Transcriber ──▶ Command mode ──▶
 (global)   (mic audio)   (local Parakeet)  (opt-in LLM)     (pasteboard + ⌘V)
 ```
 
-- **Dictation** — hold the chord to record, release to transcribe. Parakeet
+- **Dictation** — tap the chord to start recording, tap again to stop and
+  transcribe. Parakeet
   Unified EN 0.6B runs locally on the Neural Engine via
   [FluidAudio](https://github.com/FluidInference/FluidAudio); the text is
   inserted at the cursor. If insertion fails, the transcript goes to the
