@@ -1,5 +1,5 @@
 #!/bin/bash
-# Assemble Pfeifer.app from the release build, codesign it, and
+# Assemble pfeifer.app from the release build, codesign it, and
 # (optionally) launch it. Run from the repo root via `make app`.
 #
 # The app is a menu-bar agent (LSUIElement): no Dock icon, no main window.
@@ -17,7 +17,7 @@
 # when not.
 set -euo pipefail
 
-APP_NAME="Pfeifer"
+APP_NAME="pfeifer"
 BUNDLE_ID="com.tunmise.pfeifer"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 APP="$ROOT/$APP_NAME.app"
@@ -32,6 +32,7 @@ rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS"
 cp "$BIN_PATH/$APP_NAME" "$APP/Contents/MacOS/$APP_NAME"
 
+# The bundle and binary are lowercase; the display name keeps its capital P.
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -42,9 +43,9 @@ cat > "$APP/Contents/Info.plist" <<PLIST
     <key>CFBundleIdentifier</key>
     <string>$BUNDLE_ID</string>
     <key>CFBundleName</key>
-    <string>$APP_NAME</string>
+    <string>Pfeifer</string>
     <key>CFBundleDisplayName</key>
-    <string>$APP_NAME</string>
+    <string>Pfeifer</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
