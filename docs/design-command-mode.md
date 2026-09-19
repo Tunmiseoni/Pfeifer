@@ -89,7 +89,7 @@ utterance ────▶ ASR transcript                               │
 
 ## Components
 
-### 1. `SpeechTokens` (new, `Sources/PfeiferCore/SpeechTokens.swift`)
+### 1. `SpeechTokens` (new, `Sources/pfeiferCore/SpeechTokens.swift`)
 
 Deterministic spoken-punctuation substitution. Runs on every transcript
 *before* any model call, so the model never sees the literal token words and
@@ -115,7 +115,7 @@ the guard compares post-substitution text on both sides.
 Multi-word phrases matched longest-first, case-insensitive, word-boundary
 anchored. Unit-tested for collisions.
 
-### 2. `CommandGrammar` (new, `Sources/PfeiferCore/CommandGrammar.swift`)
+### 2. `CommandGrammar` (new, `Sources/pfeiferCore/CommandGrammar.swift`)
 
 Leading-only deterministic classifier. No embedded natural-language command
 detection — that is the same semantic ambiguity as the original bug, moved
@@ -147,7 +147,7 @@ into a regex.
 (their content would be the empty remainder), so they require a readable
 selection and refuse loudly otherwise.
 
-### 3. `CommandTemplates` (new, `Sources/PfeiferCore/CommandTemplates.swift`)
+### 3. `CommandTemplates` (new, `Sources/pfeiferCore/CommandTemplates.swift`)
 
 One narrow system instruction per transform, free-form output (schema output
 was measured and rejected). Chosen deterministically by `CommandGrammar`,
@@ -167,7 +167,7 @@ never by the model.
 | `.fix` | *Correct errors in the text. Preserve every fact, name, and number exactly. Change only what is wrong. Output only the corrected text.* |
 | `.cleanup` (default) | *You are a dictation cleaner. Remove filler words, humming, immediate word repetitions, and abandoned false starts where the speaker corrects themselves. Preserve every distinct fact, name, and number; preserve all other wording and order. Output only the cleaned text.* |
 
-### 4. `SubsequenceGuard` (new, `Sources/PfeiferCore/SubsequenceGuard.swift`)
+### 4. `SubsequenceGuard` (new, `Sources/pfeiferCore/SubsequenceGuard.swift`)
 
 Structural safety net for the cleanup path. A fabricated document is not a
 subsequence of what the user said, so this directly kills the observed
@@ -215,7 +215,7 @@ the synthetic ⌘V lands in whatever app is frontmost.
   AX-direct write, else leave the text on the clipboard and notify. Full
   background insertion is deferred (below).
 
-### 7. `CommandProcessor` rework (`Sources/PfeiferCore/CommandProcessor.swift`)
+### 7. `CommandProcessor` rework (`Sources/pfeiferCore/CommandProcessor.swift`)
 
 Protocol change:
 
@@ -228,7 +228,7 @@ func process(_ content: String, transform: Transform) async throws -> String
 - `CommandProcessorError` vocabulary unchanged.
 - No classification inside the processor — it is told the transform.
 
-### 8. `DictationCoordinator` wiring (`Sources/PfeiferCore/DictationCoordinator.swift`)
+### 8. `DictationCoordinator` wiring (`Sources/pfeiferCore/DictationCoordinator.swift`)
 
 Per utterance:
 
@@ -249,7 +249,7 @@ Per utterance:
 5. Failure/refusal paths never lose text: clipboard fallback + notification,
    per the existing guarantee.
 
-### 9. App shell (`Sources/Pfeifer/PfeiferApp.swift`)
+### 9. App shell (`Sources/pfeifer/pfeiferApp.swift`)
 
 - Menu items: "Copy last raw transcript", "Copy last inserted text".
 - Setting for spoken punctuation (default on).

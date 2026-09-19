@@ -127,7 +127,7 @@ public enum ChordEvent: Equatable, Sendable {
 
 ### Gesture routing
 
-- `ChordGesture` (pure, `PfeiferCore`): `pressed(at:mode:)`,
+- `ChordGesture` (pure, `pfeiferCore`): `pressed(at:mode:)`,
   `released(at:)`, `thresholdElapsed()` → returns actions
   (`.toggleBatch`, `.beginStream(mode)`, `.endStream`, `.none`). Driven by
   explicit timestamps so tests need no real timers.

@@ -28,7 +28,7 @@ public enum ModelLocator {
             return URL(fileURLWithPath: override, isDirectory: true)
         }
 
-        // <repo>/Sources/PfeiferCore/ModelLocator.swift -> <repo>
+        // <repo>/Sources/pfeiferCore/ModelLocator.swift -> <repo>
         let file = URL(fileURLWithPath: sourceFile)
         guard file.pathComponents.count > 3 else {
             throw LocatorError.unresolvable(

@@ -60,7 +60,7 @@ The project is verified against Swift 6.4.
 ```bash
 make build      # swift build -c release
 make test       # swift test
-make app        # assemble and codesign Pfeifer.app
+make app        # assemble and codesign pfeifer.app
 make app OPEN=1 # ...and launch it
 ```
 

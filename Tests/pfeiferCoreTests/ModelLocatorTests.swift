@@ -8,7 +8,7 @@ struct ModelLocatorTests {
     func environmentVariableWins() throws {
         let url = try ModelLocator.resolve(
             environment: ["PFEIFER_MODEL_DIR": "/custom/model/dir"],
-            sourceFile: "/repo/Sources/PfeiferCore/ModelLocator.swift"
+            sourceFile: "/repo/Sources/pfeiferCore/ModelLocator.swift"
         )
         #expect(url.path == "/custom/model/dir")
     }
@@ -17,22 +17,22 @@ struct ModelLocatorTests {
     func emptyEnvironmentVariableFallsBackToRepoRoot() throws {
         let url = try ModelLocator.resolve(
             environment: ["PFEIFER_MODEL_DIR": ""],
-            sourceFile: "/Users/x/Pfeifer/Sources/PfeiferCore/ModelLocator.swift"
+            sourceFile: "/Users/x/pfeifer/Sources/pfeiferCore/ModelLocator.swift"
         )
         #expect(
             url.path
-                == "/Users/x/Pfeifer/models/parakeet-unified-en-0.6b")
+                == "/Users/x/pfeifer/models/parakeet-unified-en-0.6b")
     }
 
     @Test
     func repoRootDerivation() throws {
         let url = try ModelLocator.resolve(
             environment: [:],
-            sourceFile: "/Users/x/Pfeifer/Sources/PfeiferCore/ModelLocator.swift"
+            sourceFile: "/Users/x/pfeifer/Sources/pfeiferCore/ModelLocator.swift"
         )
         #expect(
             url.path
-                == "/Users/x/Pfeifer/models/parakeet-unified-en-0.6b")
+                == "/Users/x/pfeifer/models/parakeet-unified-en-0.6b")
     }
 
     @Test
