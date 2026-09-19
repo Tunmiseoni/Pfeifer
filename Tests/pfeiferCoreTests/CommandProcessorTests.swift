@@ -1,5 +1,5 @@
 import Foundation
-@testable import PfeiferCore
+@testable import pfeiferCore
 import Testing
 
 /// A `CommandProcessor` with scriptable availability and output, for

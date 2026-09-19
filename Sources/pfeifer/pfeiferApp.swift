@@ -1,5 +1,5 @@
 import AppKit
-import PfeiferCore
+import pfeiferCore
 
 @main
 struct PfeiferApp {

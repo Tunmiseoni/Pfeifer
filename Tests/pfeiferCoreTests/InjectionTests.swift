@@ -1,5 +1,5 @@
 import AppKit
-@testable import PfeiferCore
+@testable import pfeiferCore
 import Testing
 
 /// Sendable, lock-guarded counter for asserting inside @Sendable posters.

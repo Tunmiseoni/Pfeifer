@@ -1,5 +1,5 @@
 @preconcurrency import AVFoundation
-@testable import PfeiferCore
+@testable import pfeiferCore
 import Testing
 
 @Suite

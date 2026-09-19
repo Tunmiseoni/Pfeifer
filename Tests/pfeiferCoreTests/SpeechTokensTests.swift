@@ -1,5 +1,5 @@
 import Foundation
-@testable import PfeiferCore
+@testable import pfeiferCore
 import Testing
 
 @Suite

@@ -2,25 +2,25 @@
 import PackageDescription
 
 let package = Package(
-    name: "Pfeifer",
+    name: "pfeifer",
     platforms: [.macOS(.v26)],
     dependencies: [
         .package(url: "https://github.com/FluidInference/FluidAudio.git", exact: "0.15.6"),
     ],
     targets: [
         .target(
-            name: "PfeiferCore",
+            name: "pfeiferCore",
             dependencies: [.product(name: "FluidAudio", package: "FluidAudio")],
             swiftSettings: [.swiftLanguageMode(.v6)]
         ),
         .executableTarget(
-            name: "Pfeifer",
-            dependencies: [.target(name: "PfeiferCore")],
+            name: "pfeifer",
+            dependencies: [.target(name: "pfeiferCore")],
             swiftSettings: [.swiftLanguageMode(.v6)]
         ),
         .testTarget(
-            name: "PfeiferCoreTests",
-            dependencies: [.target(name: "PfeiferCore")],
+            name: "pfeiferCoreTests",
+            dependencies: [.target(name: "pfeiferCore")],
             swiftSettings: [
                 .swiftLanguageMode(.v6),
                 // No Xcode on this machine: CommandLineTools ships Swift
